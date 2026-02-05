@@ -1,0 +1,62 @@
+{
+  "hero": {
+    "greeting": "Hi, this is",
+    "welcome": "Welcome to my little corner."
+  },
+  "about": {
+    "title": "About Me",
+    "intro1": "I love coding, especially Rust.",
+    "intro2": "Building an HTTP framework to make web programming simpler.",
+    "intro3": "I believe technology should be simple and elegant.",
+    "skills": "Skills",
+    "hobbies": "Hobbies",
+    "hobby_coding": "Coding",
+    "hobby_travel": "Travel",
+    "hobby_food": "Food",
+    "hobby_photo": "Photo",
+    "hobby_reading": "Reading",
+    "transition_to_github": "Here's my footprint on GitHub ↓"
+  },
+  "github": {
+    "transition_to_travel": "When I'm not coding, I like to explore..."
+  },
+  "travel": {
+    "title": "TRAVEL MAP",
+    "intro": "Places I've been to",
+    "select": "SELECT A LOCATION",
+    "selectHint": "Select a location on the map to view photos",
+    "cities": "CITIES",
+    "photos": "PHOTOS"
+  },
+  "kitchen": {
+    "title": "Kitchen Diary",
+    "subtitle": "Documenting every dish I cook",
+    "back": "Back to Home",
+    "ingredients": "Ingredients",
+    "steps": "Steps",
+    "tips": "Tips"
+  },
+  "musings": {
+    "title": "Musings",
+    "subtitle": "Random thoughts and reflections"
+  },
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "travel": "Travel",
+    "kitchen": "Kitchen",
+    "musings": "Musings"
+  },
+  "footer": {
+    "copyright": "© 2024 Lexo. Built with ❤️ and React."
+  },
+  "dialogue": {
+    "greeting": "Hello! Nice to meet you~",
+    "intro": "I'm Lexo, a passionate coder.",
+    "rust": "Lately I've been diving into Rust, its type system is amazing!",
+    "project": "I'm building an HTTP framework to make web programming easier.",
+    "travel": "Besides coding, I also love traveling and photography.",
+    "food": "Oh, I also enjoy cooking, though I'm just okay at it~",
+    "end": "Nice chatting with you! Come visit again~"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "hero": {
+    "greeting": "你好，这里是",
+    "welcome": "欢迎来到我的小角落。"
+  },
+  "about": {
+    "title": "关于我",
+    "intro1": "喜欢写代码，尤其是 Rust。",
+    "intro2": "正在做一个 HTTP 框架，希望能让网络编程变得更简单。",
+    "intro3": "相信技术应该是简洁而优雅的。",
+    "skills": "技能树",
+    "hobbies": "兴趣爱好",
+    "hobby_coding": "编程",
+    "hobby_travel": "旅行",
+    "hobby_food": "美食",
+    "hobby_photo": "摄影",
+    "hobby_reading": "阅读",
+    "transition_to_github": "这是我在 GitHub 上留下的足迹 ↓"
+  },
+  "github": {
+    "transition_to_travel": "当我不在写代码的时候，我喜欢出去走走..."
+  },
+  "travel": {
+    "title": "TRAVEL MAP",
+    "intro": "这些是我去过的地方",
+    "select": "SELECT A LOCATION",
+    "selectHint": "在地图上选择一个地点查看照片",
+    "cities": "CITIES",
+    "photos": "PHOTOS"
+  },
+  "kitchen": {
+    "title": "厨房日记",
+    "subtitle": "记录每一道自己做的菜",
+    "back": "返回首页",
+    "ingredients": "食材",
+    "steps": "步骤",
+    "tips": "小贴士"
+  },
+  "musings": {
+    "title": "碎碎念",
+    "subtitle": "一些随想和思考"
+  },
+  "nav": {
+    "home": "首页",
+    "about": "关于",
+    "travel": "旅行",
+    "kitchen": "厨房",
+    "musings": "随想"
+  },
+  "footer": {
+    "copyright": "© 2024 Lexo. 用 ❤️ 和 React 构建。"
+  },
+  "dialogue": {
+    "greeting": "你好！很高兴见到你~",
+    "intro": "我是 Lexo，一个热爱编程的人。",
+    "rust": "最近在研究 Rust，它的类型系统真的很棒！",
+    "project": "我正在做一个 HTTP 框架，希望能让网络编程更简单。",
+    "travel": "除了写代码，我也喜欢旅行和摄影。",
+    "food": "对了，我还喜欢自己做饭，厨艺一般般啦~",
+    "end": "很高兴和你聊天！有空常来看看~"
+  }
+}

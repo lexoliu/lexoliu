@@ -1,0 +1,5 @@
+export { HeroSection } from './HeroSection'
+export { AboutSection } from './AboutSection'
+export { TravelSection } from './TravelSection'
+export { MusingsSection } from './MusingsSection'
+export { GitHubSection } from './GitHubSection'

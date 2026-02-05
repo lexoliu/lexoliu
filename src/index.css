@@ -1,0 +1,208 @@
+@import "tailwindcss";
+
+/* Theme Configuration - Hand-drawn Comic Style */
+@theme {
+  /* Color System - Based on the hand-drawn comics aesthetic */
+  --color-bg-primary: #5A9A9A;
+  --color-bg-deep: #4A8A8A;
+  --color-bg-light: #7BA3B0;
+
+  --color-paper: #FDF6E3;
+  --color-paper-warm: #F5ECD7;
+  --color-paper-aged: #EDE4D0;
+
+  --color-ink: #2C3E50;
+  --color-ink-dark: #1A252F;
+  --color-ink-light: #4A5568;
+
+  --color-accent: #E85D4C;
+  --color-accent-soft: #F07167;
+
+  --color-highlight: #FFE066;
+  --color-highlight-soft: #FFF3B0;
+
+  /* Shadows */
+  --shadow-paper: 2px 4px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-sticky: 3px 5px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-lifted: 6px 10px 20px rgba(0, 0, 0, 0.25), 0 3px 6px rgba(0, 0, 0, 0.15);
+
+  /* Font Families */
+  --font-handwriting: 'Caveat', 'Ma Shan Zheng', cursive;
+  --font-handwriting-cn: 'Ma Shan Zheng', cursive;
+  --font-script: 'Permanent Marker', 'Rock Salt', cursive;
+  --font-sans: 'Noto Sans', 'Noto Sans SC', system-ui, sans-serif;
+  --font-sans-cn: 'Noto Sans SC', 'Noto Sans', system-ui, sans-serif;
+  --font-mono: 'Martian Mono', ui-monospace, monospace;
+  --font-pixel: 'Press Start 2P', 'ZCOOL QingKe HuangYou', monospace;
+  --font-pixel-cn: 'ZCOOL QingKe HuangYou', 'Press Start 2P', monospace;
+
+  /* Spacing */
+  --spacing-section: 6rem;
+  --spacing-section-mobile: 3rem;
+
+  /* Border radius */
+  --radius-paper: 2px;
+  --radius-sticky: 3px;
+  --radius-bubble: 12px;
+
+  /* Transitions */
+  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Base Styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg-primary);
+  color: var(--color-ink);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Paper texture background pattern */
+.paper-texture {
+  background-color: var(--color-paper);
+  background-image:
+    url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+}
+
+/* Handwriting text style */
+.text-handwriting {
+  font-family: var(--font-handwriting);
+  line-height: 1.6;
+}
+
+.text-handwriting-cn {
+  font-family: var(--font-handwriting-cn);
+  line-height: 1.8;
+}
+
+/* Script font for "Lexo" branding */
+.text-script {
+  font-family: var(--font-script);
+}
+
+/* Highlight effect - like highlighter pen */
+.highlight {
+  background: linear-gradient(180deg, transparent 60%, var(--color-highlight) 60%);
+  padding: 0 4px;
+}
+
+.highlight-soft {
+  background-color: var(--color-highlight-soft);
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+/* Torn paper edge effect */
+.torn-edge-top {
+  position: relative;
+}
+
+.torn-edge-top::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: inherit;
+  clip-path: polygon(
+    0% 100%, 5% 60%, 10% 100%, 15% 70%, 20% 100%, 25% 50%,
+    30% 100%, 35% 65%, 40% 100%, 45% 55%, 50% 100%, 55% 70%,
+    60% 100%, 65% 60%, 70% 100%, 75% 75%, 80% 100%, 85% 50%,
+    90% 100%, 95% 65%, 100% 100%
+  );
+}
+
+.torn-edge-bottom {
+  position: relative;
+}
+
+.torn-edge-bottom::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: inherit;
+  clip-path: polygon(
+    0% 0%, 5% 40%, 10% 0%, 15% 30%, 20% 0%, 25% 50%,
+    30% 0%, 35% 35%, 40% 0%, 45% 45%, 50% 0%, 55% 30%,
+    60% 0%, 65% 40%, 70% 0%, 75% 25%, 80% 0%, 85% 50%,
+    90% 0%, 95% 35%, 100% 0%
+  );
+}
+
+/* Selection style */
+::selection {
+  background-color: var(--color-highlight);
+  color: var(--color-ink-dark);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-paper-warm);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-paper);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: 4px;
+}
+
+/* Utility classes */
+.container-narrow {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.container-wide {
+  max-width: 72rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+/* Custom scrollbar for specific elements */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(253, 246, 227, 0.1);
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(253, 246, 227, 0.3);
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(253, 246, 227, 0.5);
+}
