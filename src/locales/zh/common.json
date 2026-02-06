@@ -6,7 +6,7 @@
   "about": {
     "title": "关于我",
     "intro1": "喜欢写代码，尤其是 Rust。",
-    "intro2": "正在做一个 HTTP 框架，希望能让网络编程变得更简单。",
+    "intro2": "正在做一个跨平台 GUI 框架，希望能让 Rust 开发更简单。",
     "intro3": "相信技术应该是简洁而优雅的。",
     "skills": "技能树",
     "hobbies": "兴趣爱好",
@@ -16,6 +16,10 @@
     "hobby_photo": "摄影",
     "hobby_reading": "阅读",
     "transition_to_github": "这是我在 GitHub 上留下的足迹 ↓"
+  },
+  "waterui": {
+    "label": "CURRENT PROJECT",
+    "tagline": "Learn Rust, Run Native"
   },
   "github": {
     "transition_to_travel": "当我不在写代码的时候，我喜欢出去走走..."

@@ -1,12 +1,33 @@
 @import "tailwindcss";
 
-/* Theme Configuration - Hand-drawn Comic Style */
+/* Pacifico Font - Hand-written style for LEXO branding */
+@font-face {
+  font-family: 'Pacifico';
+  src: url('/fonts/Pacifico-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Theme Configuration - Retro-Modern Hybrid */
 @theme {
-  /* Color System - Based on the hand-drawn comics aesthetic */
+  /* Section Background Colors - Color Stacking System */
+  --color-hero-bg: #5A9A9A;            /* Teal - Win95 */
+  --color-about-bg: #0F0F1A;           /* Deep indigo - Spotlight dark */
+  --color-github-bg: #111111;          /* Charcoal - Tech */
+  --color-travel-bg: #8B3A3A;          /* Warm terracotta */
+  --color-footer-bg: #080808;          /* Deep void */
+
+  /* Win95 palette */
+  --color-win95-gray: #d4d0c8;
+  --color-win95-navy: #000080;
+
+  /* Legacy support */
   --color-bg-primary: #5A9A9A;
   --color-bg-deep: #4A8A8A;
   --color-bg-light: #7BA3B0;
 
+  /* Paper/Text colors */
   --color-paper: #FDF6E3;
   --color-paper-warm: #F5ECD7;
   --color-paper-aged: #EDE4D0;
@@ -15,8 +36,10 @@
   --color-ink-dark: #1A252F;
   --color-ink-light: #4A5568;
 
-  --color-accent: #E85D4C;
+  /* Accent colors */
+  --color-accent: #E85D4C;             /* Warm red - primary accent */
   --color-accent-soft: #F07167;
+  --color-accent-secondary: #5A9A9A;   /* Teal echo */
 
   --color-highlight: #FFE066;
   --color-highlight-soft: #FFF3B0;
@@ -25,8 +48,10 @@
   --shadow-paper: 2px 4px 8px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-sticky: 3px 5px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
   --shadow-lifted: 6px 10px 20px rgba(0, 0, 0, 0.25), 0 3px 6px rgba(0, 0, 0, 0.15);
+  --shadow-omori: 4px 4px 0px 0px rgba(0, 0, 0, 1);
 
   /* Font Families */
+  --font-chocolate: 'Pacifico', 'Caveat', cursive;
   --font-handwriting: 'Caveat', 'Ma Shan Zheng', cursive;
   --font-handwriting-cn: 'Ma Shan Zheng', cursive;
   --font-script: 'Permanent Marker', 'Rock Salt', cursive;

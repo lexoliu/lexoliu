@@ -57,80 +57,70 @@ export function DialogueOverlay({
     <AnimatePresence>
       {isOpen && !isComplete && (
         <motion.div
-          className="fixed inset-x-0 bottom-0 z-50 p-4 md:p-8"
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 50 }}
-          transition={{ duration: 0.3 }}
-          onClick={advance}
+          className="fixed inset-0 z-50 flex items-end justify-center p-6 md:p-12"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
         >
-          {/* Dialogue box - fixed at bottom */}
-          <div className="max-w-3xl mx-auto relative cursor-pointer select-none">
-            {/* Outer border - white, pixelated corners */}
-            <div
-              className="absolute inset-0 bg-paper"
-              style={{
-                clipPath: `polygon(
-                  0 8px, 8px 8px, 8px 0,
-                  calc(100% - 8px) 0, calc(100% - 8px) 8px, 100% 8px,
-                  100% calc(100% - 8px), calc(100% - 8px) calc(100% - 8px), calc(100% - 8px) 100%,
-                  8px 100%, 8px calc(100% - 8px), 0 calc(100% - 8px)
-                )`,
-              }}
-            />
+          {/* Dark overlay */}
+          <motion.div
+            className="absolute inset-0 bg-black/50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
 
-            {/* Inner dark box */}
+          {/* OMORI style dialogue box */}
+          <motion.div
+            className="relative w-full max-w-2xl cursor-pointer select-none"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 30 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            onClick={advance}
+          >
+            {/* Main box - white background, black border, hard shadow */}
             <div
-              className="relative bg-[#1a1a2e] mx-[6px] my-[6px]"
-              style={{
-                clipPath: `polygon(
-                  0 6px, 6px 6px, 6px 0,
-                  calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px,
-                  100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%,
-                  6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px)
-                )`,
-              }}
+              className="bg-white border-4 border-black p-6 md:p-8"
+              style={{ boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)' }}
             >
-              {/* Content area */}
-              <div className="px-8 py-6 min-h-[80px]">
-                {/* Single message at a time */}
-                <p
-                  className="text-paper text-lg leading-loose tracking-wide"
-                  style={{ fontFamily: 'var(--font-pixel-cn)' }}
-                >
-                  {currentText}
-                  {isTyping && (
-                    <motion.span
-                      className="inline-block w-3 h-5 bg-paper ml-1 align-middle"
-                      animate={{ opacity: [1, 0] }}
-                      transition={{ duration: 0.4, repeat: Infinity }}
-                    />
-                  )}
-                </p>
-
-                {/* Continue indicator ▼ */}
-                {waitingForAdvance && (
-                  <motion.div
-                    className="absolute bottom-4 right-6"
-                    animate={{ y: [0, 6, 0] }}
-                    transition={{ duration: 0.5, repeat: Infinity }}
-                  >
-                    <span
-                      className="text-highlight text-sm"
-                      style={{ fontFamily: 'var(--font-pixel)' }}
-                    >
-                      ▼
-                    </span>
-                  </motion.div>
+              {/* Text content */}
+              <p
+                className="text-black text-lg md:text-xl leading-relaxed min-h-[60px]"
+                style={{ fontFamily: 'var(--font-mono)' }}
+              >
+                {currentText}
+                {isTyping && (
+                  <motion.span
+                    className="inline-block w-2 h-5 bg-black ml-1 align-middle"
+                    animate={{ opacity: [1, 0] }}
+                    transition={{ duration: 0.4, repeat: Infinity }}
+                  />
                 )}
-              </div>
-            </div>
-          </div>
+              </p>
 
-          {/* Hint text */}
-          <p className="text-center text-paper/40 text-xs mt-3 font-mono">
-            点击继续 · ESC 关闭
-          </p>
+              {/* Continue indicator - bouncing triangle */}
+              {waitingForAdvance && (
+                <motion.div
+                  className="absolute bottom-4 right-6"
+                  animate={{ y: [0, 4, 0] }}
+                  transition={{ duration: 0.6, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <span className="text-black text-lg">▼</span>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Hint text */}
+            <p
+              className="text-white/60 text-xs text-center mt-4"
+              style={{ fontFamily: 'var(--font-mono)' }}
+            >
+              CLICK TO CONTINUE · ESC TO CLOSE
+            </p>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

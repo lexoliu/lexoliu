@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Parallax } from 'react-scroll-parallax'
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps'
 // World TopoJSON (ISC license)
 import worldTopo from 'world-atlas/countries-110m.json'
@@ -89,7 +88,7 @@ function MinimalMarker({
       {/* Dot */}
       <motion.circle
         r={isActive ? 1.5 : 1}
-        fill={isActive ? '#E85D4C' : '#FDF6E3'}
+        fill={isActive ? '#E85D4C' : 'rgba(253, 246, 227, 0.8)'}
         transition={{ type: 'spring', stiffness: 400, damping: 20 }}
       />
 
@@ -101,7 +100,7 @@ function MinimalMarker({
           fontFamily: 'var(--font-sans-cn)',
           fontSize: '2.5px',
           fontWeight: 500,
-          fill: isActive ? '#E85D4C' : '#FDF6E3',
+          fill: isActive ? '#E85D4C' : 'rgba(253, 246, 227, 0.9)',
         }}
       >
         {spot.name}
@@ -142,11 +141,11 @@ const WorldMap = memo(function WorldMap({
                 key={geo.rsmKey}
                 geography={geo}
                 fill="transparent"
-                stroke="rgba(253, 246, 227, 0.4)"
+                stroke="rgba(253, 246, 227, 0.3)"
                 strokeWidth={0.5}
                 style={{
                   default: { outline: 'none' },
-                  hover: { outline: 'none', fill: 'rgba(253, 246, 227, 0.1)' },
+                  hover: { outline: 'none', fill: 'rgba(253, 246, 227, 0.08)' },
                   pressed: { outline: 'none' },
                 }}
               />
@@ -212,7 +211,7 @@ function Lightbox({
         onClick={onClose}
         style={{ fontFamily: 'var(--font-pixel)' }}
       >
-        ✕ CLOSE
+        X CLOSE
       </button>
 
       {/* Previous button */}
@@ -226,7 +225,7 @@ function Lightbox({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
         >
-          ←
+          &larr;
         </motion.button>
       )}
 
@@ -258,7 +257,7 @@ function Lightbox({
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
         >
-          →
+          &rarr;
         </motion.button>
       )}
     </motion.div>
@@ -289,7 +288,7 @@ function PhotoGallery({
       <div className="flex items-center justify-between mb-4">
         <h3
           className="text-paper text-xl"
-          style={{ fontFamily: 'var(--font-handwriting-zh)' }}
+          style={{ fontFamily: 'var(--font-handwriting-cn)' }}
         >
           {locationName}
         </h3>
@@ -354,62 +353,67 @@ export function TravelSection() {
     <section
       ref={sectionRef}
       id="travel"
-      className="sticky top-0 z-30 min-h-screen overflow-hidden bg-[#C94A3A]"
+      className="sticky top-0 z-30 min-h-screen overflow-hidden"
+      style={{
+        background: 'linear-gradient(135deg, var(--color-travel-bg) 0%, #6B2D2D 100%)',
+      }}
     >
-      {/* Parallax wrapper - entire travel content moves together */}
-      <Parallax translateY={[-50, 50]} speed={-10} className="relative min-h-screen">
-        {/* Red gradient background - covers entire parallax area */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(180deg, #C94A3A 0%, #E85D4C 40%, #D64545 60%, #B83B3B 100%)',
-          }}
-        />
+      {/* Section label */}
+      <div className="absolute top-8 left-6 md:left-12 z-20">
+        <motion.p
+          className="text-paper/30 text-xs tracking-[0.3em] uppercase"
+          style={{ fontFamily: 'var(--font-pixel)' }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          TRAVELS
+        </motion.p>
+      </div>
 
-        {/* Map - covers entire area */}
-        <div className="absolute inset-0">
-          <WorldMap activeSpot={activeSpot} onSpotClick={setActiveSpot} />
-        </div>
+      {/* Map - covers entire area */}
+      <div className="absolute inset-0">
+        <WorldMap activeSpot={activeSpot} onSpotClick={setActiveSpot} />
+      </div>
 
-        {/* Title - floating on top */}
-        <div className="relative z-10 pt-16 md:pt-24 px-6 md:px-12 lg:px-24">
-          <h2
-            className="text-paper text-3xl md:text-5xl tracking-wider"
-            style={{ fontFamily: 'var(--font-pixel)' }}
+      {/* Title - floating on top */}
+      <div className="relative z-10 pt-16 md:pt-24 px-6 md:px-12 lg:px-24">
+        <h2
+          className="text-paper text-3xl md:text-5xl tracking-wider"
+          style={{ fontFamily: 'var(--font-pixel)' }}
+        >
+          <span className="bg-highlight px-2 text-ink">{t('travel.title')}</span>
+        </h2>
+      </div>
+
+      {/* Photo gallery - slides in from right */}
+      <AnimatePresence>
+        {activeSpotData && (
+          <motion.div
+            className="hidden lg:block absolute right-0 top-0 bottom-0 w-72 z-20"
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
           >
-            <span className="bg-highlight px-2 text-ink">{t('travel.title')}</span>
-          </h2>
-        </div>
+            <div className="h-full bg-[#5A2020]/90 backdrop-blur-sm p-4 border-l border-paper/20">
+              <button
+                onClick={() => setActiveSpot(null)}
+                className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-paper/60 hover:text-paper text-lg"
+              >
+                x
+              </button>
+              <PhotoGallery
+                photos={activeSpotData.photos}
+                locationName={activeSpotData.name}
+                onPhotoClick={openLightbox}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Photo gallery - slides in from right */}
-        <AnimatePresence>
-          {activeSpotData && (
-            <motion.div
-              className="hidden lg:block absolute right-0 top-0 bottom-0 w-72 z-20"
-              initial={{ x: '100%', opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: '100%', opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            >
-              <div className="h-full bg-[#8B2020]/90 backdrop-blur-sm p-4 border-l border-paper/20">
-                <button
-                  onClick={() => setActiveSpot(null)}
-                  className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-paper/60 hover:text-paper text-lg"
-                >
-                  ×
-                </button>
-                <PhotoGallery
-                  photos={activeSpotData.photos}
-                  locationName={activeSpotData.name}
-                  onPhotoClick={openLightbox}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </Parallax>
-
-      {/* Mobile photo gallery - floating overlay (outside parallax) */}
+      {/* Mobile photo gallery - floating overlay */}
       <AnimatePresence>
         {activeSpotData && (
           <>
@@ -427,12 +431,12 @@ export function TravelSection() {
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             >
-              <div className="h-full bg-[#8B2020]/95 backdrop-blur-sm p-5 border-l border-paper/20">
+              <div className="h-full bg-[#5A2020]/95 backdrop-blur-sm p-5 border-l border-paper/20">
                 <button
                   onClick={() => setActiveSpot(null)}
                   className="absolute top-4 right-4 text-paper/60 hover:text-paper text-xl"
                 >
-                  ×
+                  x
                 </button>
                 <PhotoGallery
                   photos={activeSpotData.photos}

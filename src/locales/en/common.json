@@ -6,7 +6,7 @@
   "about": {
     "title": "About Me",
     "intro1": "I love coding, especially Rust.",
-    "intro2": "Building an HTTP framework to make web programming simpler.",
+    "intro2": "Building a cross-platform GUI framework to make Rust development easier.",
     "intro3": "I believe technology should be simple and elegant.",
     "skills": "Skills",
     "hobbies": "Hobbies",
@@ -16,6 +16,10 @@
     "hobby_photo": "Photo",
     "hobby_reading": "Reading",
     "transition_to_github": "Here's my footprint on GitHub ↓"
+  },
+  "waterui": {
+    "label": "CURRENT PROJECT",
+    "tagline": "Learn Rust, Run Native"
   },
   "github": {
     "transition_to_travel": "When I'm not coding, I like to explore..."

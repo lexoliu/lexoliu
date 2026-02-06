@@ -23,7 +23,8 @@ export function useDialogue({
   const [phase, setPhase] = useState<'idle' | 'typing' | 'waiting'>('idle')
 
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevEnabled = useRef(enabled)
+  const prevEnabled = useRef(false)
+  const isFirstRun = useRef(true)
 
   const currentMessage = messages[currentIndex]
   const isComplete = currentIndex >= messages.length
@@ -51,6 +52,18 @@ export function useDialogue({
 
   // Handle enabled change - start typing when becoming enabled
   useEffect(() => {
+    // Skip first run to avoid triggering on mount
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+      prevEnabled.current = enabled
+      // If already enabled on mount, start typing
+      if (enabled && currentMessage) {
+        setCharIndex(0)
+        setPhase('typing')
+      }
+      return
+    }
+
     if (enabled && !prevEnabled.current && currentMessage) {
       // Just became enabled, start typing
       setCharIndex(0)
