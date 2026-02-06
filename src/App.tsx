@@ -1,8 +1,13 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ParallaxProvider } from 'react-scroll-parallax'
-import { HeroSection, AboutSection, WaterUISection, GitHubSection, TravelSection } from '@/components/sections'
+import { AboutSection, WaterUISection, GitHubSection, TravelSection } from '@/components/sections'
+import { BootSequence3D } from '@/components/boot'
 import { KitchenPage } from '@/pages/KitchenPage'
+
+// Height of zoom zone in vh units
+const ZOOM_ZONE_HEIGHT = 100
 
 function Footer() {
   const { t, i18n } = useTranslation()
@@ -79,15 +84,81 @@ function Footer() {
 }
 
 function HomePage() {
+  const [bootComplete, setBootComplete] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(0)
+  const [zoomComplete, setZoomComplete] = useState(false)
+  const lastScrollY = useRef(0)
+  const isBouncingBack = useRef(false)
+
+  // Handle scroll to calculate zoom progress
+  const handleScroll = useCallback(() => {
+    const scrollY = window.scrollY
+    const viewportHeight = window.innerHeight
+    const zoomZoneHeight = viewportHeight * (ZOOM_ZONE_HEIGHT / 100)
+
+    // If boot not complete, bounce back
+    if (!bootComplete) {
+      if (scrollY > 0 && !isBouncingBack.current) {
+        isBouncingBack.current = true
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        setTimeout(() => {
+          isBouncingBack.current = false
+        }, 500)
+      }
+      return
+    }
+
+    // Calculate zoom progress (0 to 1 over the zoom zone)
+    const progress = Math.min(1, Math.max(0, scrollY / zoomZoneHeight))
+    setScrollProgress(progress)
+
+    // Check if zoom is complete
+    if (progress >= 1 && !zoomComplete) {
+      setZoomComplete(true)
+    }
+
+    lastScrollY.current = scrollY
+  }, [bootComplete, zoomComplete])
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
+
+  // Reset scroll to top on mount
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [])
+
   return (
-    <main className="min-h-screen bg-[var(--color-footer-bg)]">
-      <HeroSection />
-      <AboutSection />
-      <WaterUISection />
-      <GitHubSection />
-      <TravelSection />
-      <Footer />
-    </main>
+    <>
+      {/* 3D Room - fixed background layer, always rendered */}
+      <BootSequence3D
+        onComplete={() => setBootComplete(true)}
+        scrollProgress={scrollProgress}
+      />
+
+      {/* Spacer for boot sequence (100vh) + zoom zone (100vh) */}
+      <div style={{ height: `${100 + ZOOM_ZONE_HEIGHT}vh` }} />
+
+      {/* Main content - scrolls over the 3D CRT screen after zoom complete */}
+      {/* No HeroSection - the 3D CRT screen IS the hero */}
+      <main
+        className="relative"
+        style={{
+          zIndex: 10,
+          opacity: zoomComplete ? 1 : 0,
+          transition: 'opacity 0.3s ease-out',
+          pointerEvents: zoomComplete ? 'auto' : 'none',
+        }}
+      >
+        <AboutSection />
+        <WaterUISection />
+        <GitHubSection />
+        <TravelSection />
+        <Footer />
+      </main>
+    </>
   )
 }
 

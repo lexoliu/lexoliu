@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
-/* Pacifico Font - Hand-written style for LEXO branding */
+/* Painting With Chocolate Font - Brush script for LEXO branding (same as unc0ver.dev) */
 @font-face {
-  font-family: 'Pacifico';
-  src: url('/fonts/Pacifico-Regular.ttf') format('truetype');
-  font-weight: normal;
+  font-family: 'Chocolate';
+  src: url('/fonts/painting-with-chocolate.woff2') format('woff2');
+  font-weight: 100;
   font-style: normal;
   font-display: swap;
 }
@@ -51,7 +51,7 @@
   --shadow-omori: 4px 4px 0px 0px rgba(0, 0, 0, 1);
 
   /* Font Families */
-  --font-chocolate: 'Pacifico', 'Caveat', cursive;
+  --font-chocolate: 'Chocolate', 'Caveat', cursive;
   --font-handwriting: 'Caveat', 'Ma Shan Zheng', cursive;
   --font-handwriting-cn: 'Ma Shan Zheng', cursive;
   --font-script: 'Permanent Marker', 'Rock Salt', cursive;
