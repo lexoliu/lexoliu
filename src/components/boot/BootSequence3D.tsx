@@ -2425,6 +2425,66 @@ function Plant() {
   )
 }
 
+// Ceiling Light - Simple industrial Edison bulb pendant
+function CeilingLight({ isOn, onClick }: { isOn: boolean, onClick?: () => void }) {
+  return (
+    <group position={[0, 2.2, -0.5]} onClick={onClick}>
+      {/* Simple ceiling canopy */}
+      <mesh position={[0, 0.35, 0]}>
+        <cylinderGeometry args={[0.06, 0.08, 0.04, 16]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.6} metalness={0.4} />
+      </mesh>
+
+      {/* Twisted fabric cord */}
+      <mesh position={[0, 0.12, 0]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.42, 8]} />
+        <meshStandardMaterial color="#2a2520" roughness={0.9} />
+      </mesh>
+
+      {/* Brass socket */}
+      <mesh position={[0, -0.12, 0]}>
+        <cylinderGeometry args={[0.035, 0.04, 0.1, 12]} />
+        <meshStandardMaterial color="#8b7355" roughness={0.3} metalness={0.7} />
+      </mesh>
+
+      {/* Edison bulb - classic elongated shape */}
+      <group position={[0, -0.26, 0]}>
+        {/* Bulb glass */}
+        <mesh>
+          <capsuleGeometry args={[0.05, 0.1, 8, 16]} />
+          <meshStandardMaterial
+            color={isOn ? "#fff8e0" : "#e8e4dc"}
+            roughness={0.1}
+            metalness={0}
+            transparent
+            opacity={0.85}
+            emissive={isOn ? "#ff9933" : "#000000"}
+            emissiveIntensity={isOn ? 0.6 : 0}
+          />
+        </mesh>
+
+        {/* Filament glow when on */}
+        {isOn && (
+          <mesh>
+            <cylinderGeometry args={[0.006, 0.006, 0.06, 6]} />
+            <meshBasicMaterial color="#ffaa44" />
+          </mesh>
+        )}
+      </group>
+
+      {/* Light when on */}
+      {isOn && (
+        <pointLight
+          position={[0, -0.26, 0]}
+          intensity={4}
+          color="#ffeecc"
+          distance={12}
+        />
+      )}
+    </group>
+  )
+}
+
 // Main 3D Scene - cozy lofi room with desk and CRT
 function Scene({
   phase,
@@ -2462,23 +2522,33 @@ function Scene({
       <CameraRig scrollProgress={scrollProgress} />
 
       {/* === LOFI ROOM LIGHTING === */}
-      {/* Soft ambient - slightly warm */}
-      <ambientLight intensity={0.25} color="#1a1815" />
+      {/* Soft ambient - brighter when lamp is on */}
+      <ambientLight intensity={lampOn ? 0.5 : 0.15} color={lampOn ? "#f5e8d8" : "#0a0805"} />
 
-      {/* Main warm desk lamp light (when on) */}
+      {/* Main warm desk lamp light (when on) - fills the room */}
       {lampOn && (
-        <pointLight
-          position={[-2, 0, 1]}
-          intensity={2.5}
-          color="#ff9944"
-          distance={8}
-        />
+        <>
+          {/* Direct lamp light */}
+          <pointLight
+            position={[-2, 0, 1]}
+            intensity={3}
+            color="#ff9944"
+            distance={10}
+          />
+          {/* Bounced light filling the room */}
+          <pointLight
+            position={[0, 1, 0]}
+            intensity={1.5}
+            color="#ffcc88"
+            distance={12}
+          />
+        </>
       )}
 
       {/* Subtle fill from right - window light */}
       <pointLight
         position={[5, 2, 0]}
-        intensity={1.5}
+        intensity={lampOn ? 0.6 : 1.2}
         color="#445566"
         distance={10}
       />
@@ -2486,7 +2556,7 @@ function Scene({
       {/* Soft overhead fill */}
       <pointLight
         position={[0, 4, 2]}
-        intensity={0.8}
+        intensity={lampOn ? 0.3 : 0.6}
         color="#554433"
         distance={12}
       />

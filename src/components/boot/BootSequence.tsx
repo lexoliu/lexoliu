@@ -357,7 +357,7 @@ export function BootSequence({ onComplete }: BootSequenceProps) {
         </motion.div>
 
         {/* Skip button */}
-        {phase !== 'desktop' && phase !== 'zoomin' && phase !== 'done' && phase !== 'black' && (
+        {!['desktop', 'zoomin', 'done', 'black'].includes(phase) && (
           <motion.button
             className="absolute bottom-4 right-4 text-white/20 text-[10px] font-mono hover:text-white/50 transition-colors"
             initial={{ opacity: 0 }}

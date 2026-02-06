@@ -1,14 +1,11 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 export function Navigation() {
   const { t, i18n } = useTranslation()
-  const location = useLocation()
   const [isOpen, setIsOpen] = useState(false)
-
-  const isHome = location.pathname === '/'
 
   const toggleLanguage = () => {
     i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh')

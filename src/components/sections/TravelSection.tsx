@@ -129,14 +129,14 @@ const WorldMap = memo(function WorldMap({
       <ZoomableGroup
         center={position.coordinates}
         zoom={position.zoom}
-        onMoveEnd={(pos) => setPosition(pos)}
+        onMoveEnd={(pos: { coordinates: [number, number]; zoom: number }) => setPosition(pos)}
         minZoom={5}
         maxZoom={5}
-        filterZoomEvent={(evt) => evt.type !== 'wheel'}
+        filterZoomEvent={(evt: WheelEvent | TouchEvent) => evt.type !== 'wheel'}
       >
         <Geographies geography={worldTopo}>
-          {({ geographies }) =>
-            geographies.map((geo) => (
+          {({ geographies }: { geographies: { rsmKey: string }[] }) =>
+            geographies.map((geo: { rsmKey: string }) => (
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
