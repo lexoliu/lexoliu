@@ -2355,6 +2355,12 @@ function WindowWithView() {
 function DeskLamp({ lampOn, onClick }: { lampOn: boolean, onClick?: () => void }) {
   return (
     <group position={[-2.2, -1.98, 0.2]} onClick={onClick}>
+      {/* Invisible hitbox for easier clicking */}
+      <mesh position={[0, 0.4, -0.1]}>
+        <boxGeometry args={[0.6, 1.0, 0.6]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
       {/* Base */}
       <mesh position={[0, 0, 0]}>
         <cylinderGeometry args={[0.2, 0.22, 0.05, 16]} />
