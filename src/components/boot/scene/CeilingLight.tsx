@@ -77,8 +77,10 @@ export function WallSwitch({ on, onToggle }: WallSwitchProps) {
   const [hovered, setHovered] = useState(false)
   useCursor(hovered)
   return (
+    // Mounted on the back wall just left of the bookshelf so it's visible
+    // past the monitor's silhouette in the room view.
     <group
-      position={[-3.6, -0.4, -3.92]}
+      position={[-2.5, -0.4, -3.95]}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
       onPointerOut={() => setHovered(false)}

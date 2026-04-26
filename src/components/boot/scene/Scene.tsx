@@ -9,7 +9,9 @@ import { DeskLamp } from './DeskLamp'
 import { CeilingLight, WallSwitch } from './CeilingLight'
 import { Plant } from './Plant'
 import { DeskAccessories } from './DeskAccessories'
+import { CoffeeMug } from './CoffeeMug'
 import { CRTMonitor } from './CRTMonitor'
+import { DustMotes } from './Atmosphere'
 
 interface SceneProps {
   phase: Phase
@@ -40,10 +42,12 @@ export function Scene(props: SceneProps) {
       <WorldMap />
       <NightWindow />
       <Plant />
+      <CoffeeMug />
       <DeskAccessories />
       <DeskLamp on={props.lampOn} onToggle={props.onToggleLamp} />
       <CeilingLight on={props.lampOn} onToggle={props.onToggleLamp} />
       <WallSwitch on={props.lampOn} onToggle={props.onToggleLamp} />
+      <DustMotes visible={props.lampOn} />
 
       {/* Soft contact shadow under everything desk-height — anchors objects to the desktop. */}
       <ContactShadows

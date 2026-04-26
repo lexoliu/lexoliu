@@ -14,21 +14,21 @@ interface LightingProps {
 export function Lighting({ lampOn, computerOn, phase }: LightingProps) {
   return (
     <>
-      <ambientLight intensity={lampOn ? 0.55 : 0.32} color={lampOn ? '#f5e6cc' : '#3b4a64'} />
+      <ambientLight intensity={lampOn ? 0.7 : 0.32} color={lampOn ? '#f7e8d0' : '#3b4a64'} />
       <hemisphereLight
-        intensity={lampOn ? 0.6 : 0.45}
-        color={lampOn ? '#fff1dc' : '#7a93b8'}
+        intensity={lampOn ? 0.75 : 0.45}
+        color={lampOn ? '#fff3e0' : '#7a93b8'}
         groundColor="#1f1812"
       />
 
       {/* Warm pendant light (drives most of the room when on) */}
       {lampOn && (
-        <pointLight position={[0, 1.9, -0.3]} intensity={4.5} color="#ffe2b6" distance={14} decay={1.6} castShadow />
+        <pointLight position={[0, 1.9, -0.3]} intensity={5.6} color="#ffe2b6" distance={16} decay={1.5} castShadow />
       )}
 
-      {/* Desk lamp accent */}
+      {/* Desk lamp accent — pools onto the desk surface */}
       {lampOn && (
-        <pointLight position={[2.0, -1.0, 0.6]} intensity={2.6} color="#ffb066" distance={6} decay={1.8} />
+        <pointLight position={[2.0, -1.0, 0.6]} intensity={3.2} color="#ffb066" distance={6.5} decay={1.7} />
       )}
 
       {/* Window moonlight – stronger when the lamps are off so the scene stays readable */}
