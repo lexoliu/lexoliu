@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { ParallaxProvider } from 'react-scroll-parallax'
 import { BootSequence3D } from '@/components/boot'
 import { KitchenPage } from '@/pages/KitchenPage'
 import { useAudio } from '@/hooks/useAudio'
@@ -92,14 +91,12 @@ function HomePage() {
 
 function App() {
   return (
-    <ParallaxProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/kitchen" element={<KitchenPage />} />
-        </Routes>
-      </BrowserRouter>
-    </ParallaxProvider>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/kitchen" element={<KitchenPage />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
