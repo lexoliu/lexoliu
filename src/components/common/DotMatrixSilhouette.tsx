@@ -46,21 +46,3 @@ export const DotMatrixSilhouette = memo(function DotMatrixSilhouette({
   )
 })
 
-// Mock silhouette data - simple human figure outline
-// This will be replaced with actual photo-derived data later
-export const mockSilhouetteData: number[][] = [
-  [0, 0, 0, 1, 1, 1, 1, 0, 0, 0],
-  [0, 0, 1, 1, 1, 1, 1, 1, 0, 0],
-  [0, 0, 1, 1, 1, 1, 1, 1, 0, 0],
-  [0, 0, 0, 1, 1, 1, 1, 0, 0, 0],
-  [0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-  [0, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
-  [1, 1, 0, 0, 1, 1, 0, 0, 1, 1],
-  [0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-  [0, 0, 0, 0, 1, 1, 0, 0, 0, 0],
-  [0, 0, 0, 1, 1, 1, 1, 0, 0, 0],
-  [0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
-  [0, 1, 1, 0, 0, 0, 0, 1, 1, 0],
-]

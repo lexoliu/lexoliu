@@ -58,29 +58,44 @@ export function useDialogue({
       prevEnabled.current = enabled
       // If already enabled on mount, start typing
       if (enabled && currentMessage) {
-        setCharIndex(0)
-        setPhase('typing')
+        const timer = setTimeout(() => {
+          setCharIndex(0)
+          setPhase('typing')
+        }, 0)
+        return () => clearTimeout(timer)
       }
       return
     }
 
     if (enabled && !prevEnabled.current && currentMessage) {
       // Just became enabled, start typing
-      setCharIndex(0)
-      setPhase('typing')
-    } else if (!enabled && prevEnabled.current) {
+      const timer = setTimeout(() => {
+        setCharIndex(0)
+        setPhase('typing')
+      }, 0)
+      prevEnabled.current = enabled
+      return () => clearTimeout(timer)
+    }
+
+    if (!enabled && prevEnabled.current) {
       // Just became disabled
       if (typingTimer.current) clearTimeout(typingTimer.current)
-      setPhase('idle')
+      const timer = setTimeout(() => setPhase('idle'), 0)
+      prevEnabled.current = enabled
+      return () => clearTimeout(timer)
     }
+
     prevEnabled.current = enabled
   }, [enabled, currentMessage])
 
   // Handle message index change - start typing new message
   useEffect(() => {
     if (enabled && currentMessage && phase === 'idle') {
-      setCharIndex(0)
-      setPhase('typing')
+      const timer = setTimeout(() => {
+        setCharIndex(0)
+        setPhase('typing')
+      }, 0)
+      return () => clearTimeout(timer)
     }
   }, [enabled, currentIndex, currentMessage, phase])
 
@@ -94,7 +109,9 @@ export function useDialogue({
       }, typingSpeed)
     } else {
       // Done typing this message
-      setPhase('waiting')
+      typingTimer.current = setTimeout(() => {
+        setPhase('waiting')
+      }, 0)
     }
 
     return () => {

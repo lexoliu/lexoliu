@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { DotMatrixSilhouette, mockSilhouetteData } from '@/components/common/DotMatrixSilhouette'
+import { DotMatrixSilhouette } from '@/components/common/DotMatrixSilhouette'
+import { mockSilhouetteData } from '@/components/common/dotMatrixData'
 
 // Simple card component
 function Card({

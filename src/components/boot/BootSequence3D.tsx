@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html, RoundedBox } from '@react-three/drei'
+import { Html, RoundedBox, useCursor } from '@react-three/drei'
 import * as THREE from 'three'
 
 type PanelId = 'about' | 'github' | 'travel' | 'waterui'
@@ -55,8 +55,8 @@ const BOOT_LINES = [
 
 // Camera positions - base values
 const ROOM_VIEW = {
-  position: new THREE.Vector3(3, 1, 10),
-  lookAt: new THREE.Vector3(-0.5, -0.8, -1),
+  position: new THREE.Vector3(3.6, 1.25, 9.4),
+  lookAt: new THREE.Vector3(-0.2, -1.0, -0.5),
 }
 
 // Screen view position calculated to show full CRT with bezel
@@ -1413,13 +1413,7 @@ function GitHubContent() {
 
 // Win95 Travel Panel Content
 function TravelContent() {
-  const cities = [
-    { name: 'Hangzhou', cn: '杭州' },
-    { name: 'Shanghai', cn: '上海' },
-    { name: 'Beijing', cn: '北京' },
-    { name: 'Chengdu', cn: '成都' },
-    { name: 'Xian', cn: '西安' },
-  ]
+  const cities = ['Hangzhou', 'Shanghai', 'Beijing', 'Chengdu', 'Xian']
 
   return (
     <div style={{ lineHeight: 1.5 }}>
@@ -1436,7 +1430,7 @@ function TravelContent() {
       >
         {cities.map((city) => (
           <div
-            key={city.name}
+            key={city}
             style={{
               padding: '8px 12px',
               background: '#f5f5f5',
@@ -1447,10 +1441,7 @@ function TravelContent() {
             }}
           >
             <span style={{ color: '#E85D4C', fontSize: '16px' }}>*</span>
-            <div>
-              <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{city.name}</div>
-              <div style={{ fontSize: '10px', color: '#808080' }}>{city.cn}</div>
-            </div>
+            <div style={{ fontWeight: 'bold', fontSize: '12px' }}>{city}</div>
           </div>
         ))}
       </div>
@@ -1629,15 +1620,6 @@ function Win95Desktop({
     }
   }
 
-  // Get taskbar button rect for minimize animation
-  const getTaskbarButtonRect = (panel: PanelId) => {
-    const btn = taskbarButtonRefs.current[panel]
-    if (btn) {
-      const rect = btn.getBoundingClientRect()
-      return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
-    }
-    return { x: 60, y: 470, width: 100, height: 22 }
-  }
 
   // Toggle start menu
   const handleStartClick = (e: React.MouseEvent) => {
@@ -1877,7 +1859,6 @@ function Win95Desktop({
             initialX={config.initialX}
             initialY={config.initialY}
             zIndex={getZIndex(panel)}
-            taskbarButtonRect={getTaskbarButtonRect(panel)}
           >
             {renderWindowContent(panel)}
           </Win95Window>
@@ -1927,6 +1908,7 @@ function CRTMonitor3D({
   onClosePanel,
   onOpenPanel,
   onFocusPanel,
+  onTogglePower,
 }: {
   screenOn: boolean
   biosLines: number
@@ -1938,8 +1920,11 @@ function CRTMonitor3D({
   onClosePanel: (panel: PanelId) => void
   onOpenPanel: (panel: PanelId) => void
   onFocusPanel: (panel: PanelId) => void
+  onTogglePower?: () => void
 }) {
   const groupRef = useRef<THREE.Group>(null)
+  const [hoveredPower, setHoveredPower] = useState(false)
+  useCursor(hoveredPower)
 
   useFrame((state) => {
     if (groupRef.current) {
@@ -1949,7 +1934,7 @@ function CRTMonitor3D({
   })
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} scale={0.8} position={[0, -0.15, -0.1]}>
       {/* ===== MONITOR FRONT ===== */}
       {/* Front bezel - cream/beige color */}
       <RoundedBox args={[4.2, 3.4, 0.35]} radius={0.1} position={[0, 0, 0.82]}>
@@ -1991,7 +1976,7 @@ function CRTMonitor3D({
           boxSizing: 'border-box',
         }}>
           {/* BIOS Phase */}
-          {phase === 'bios' && (
+          {screenOn && phase === 'bios' && (
             <div style={{ color: '#aaaaaa' }}>
               {BIOS_LINES.slice(0, biosLines).map((line, i) => (
                 <div key={i} style={{ color: i === 0 ? '#ffffff' : '#aaaaaa' }}>
@@ -2011,7 +1996,7 @@ function CRTMonitor3D({
           )}
 
           {/* Boot Phase */}
-          {(phase === 'boot' || phase === 'loading') && (
+          {screenOn && (phase === 'boot' || phase === 'loading') && (
             <div>
               <div style={{ color: '#33ff33' }}>
                 {BOOT_LINES.slice(0, bootLines).map((line, i) => (
@@ -2061,7 +2046,7 @@ function CRTMonitor3D({
           )}
 
           {/* Desktop Phase */}
-          {phase === 'desktop' && (
+          {screenOn && phase === 'desktop' && (
             <Win95Desktop
               desktopIcons={desktopIcons}
               openPanels={openPanels}
@@ -2069,6 +2054,12 @@ function CRTMonitor3D({
               onOpenPanel={onOpenPanel}
               onFocusPanel={onFocusPanel}
             />
+          )}
+
+          {!screenOn && (
+            <div style={{ color: '#5f5f5f', textAlign: 'center', marginTop: '45%', fontSize: '12px' }}>
+              POWER OFF
+            </div>
           )}
 
           {/* CRT scanlines overlay */}
@@ -2144,7 +2135,31 @@ function CRTMonitor3D({
       </mesh>
       {/* LED glow */}
       {screenOn && (
-        <pointLight position={[1.15, -1.55, 1.1]} intensity={0.3} color="#33ff33" distance={0.5} />
+        <pointLight position={[1.15, -1.55, 1.1]} intensity={0.35} color="#66ff88" distance={0.55} />
+      )}
+
+      <mesh
+        position={[1.33, -1.55, 1.04]}
+        onClick={(e) => {
+          e.stopPropagation()
+          onTogglePower?.()
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHoveredPower(true)
+        }}
+        onPointerOut={() => setHoveredPower(false)}
+      >
+        <cylinderGeometry args={[0.18, 0.18, 0.12, 20]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
+      {hoveredPower && (
+        <Html position={[1.3, -1.1, 1.2]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+            Click power button to toggle computer
+          </div>
+        </Html>
       )}
 
       {/* Brand label */}
@@ -2173,13 +2188,34 @@ function CRTMonitor3D({
 }
 
 // Bookshelf Component
-function Bookshelf({ onClick }: { onClick?: () => void }) {
+function Bookshelf() {
+  const [hovered, setHovered] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  useCursor(hovered)
+
   return (
-    <group position={[0, 0.8, -3.5]} onClick={onClick}>
+    <group
+      position={[0, 0.8, -3.5]}
+      onClick={(e) => {
+        e.stopPropagation()
+        setExpanded((prev) => !prev)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
       {/* Main shelf frame - dark wood */}
       <mesh>
         <boxGeometry args={[3.5, 2.5, 0.4]} />
-        <meshStandardMaterial color="#2a1810" roughness={0.85} />
+        <meshStandardMaterial color={hovered ? "#3a2418" : "#2a1810"} roughness={0.75} />
+      </mesh>
+
+      {/* Interaction hitbox */}
+      <mesh position={[0, 0, 0.3]}>
+        <boxGeometry args={[3.8, 2.8, 0.6]} />
+        <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
       {/* Shelf dividers */}
@@ -2194,7 +2230,7 @@ function Bookshelf({ onClick }: { onClick?: () => void }) {
       {[
         { x: -1.2, color: '#4a3030', h: 0.55 },
         { x: -0.9, color: '#3a4050', h: 0.5 },
-        { x: -0.6, color: '#E85D4C', h: 0.52 }, // Rust book - accent color
+        { x: -0.6, color: '#E85D4C', h: 0.52 },
         { x: -0.3, color: '#2a3a2a', h: 0.48 },
         { x: 0.0, color: '#4a4a3a', h: 0.54 },
         { x: 0.3, color: '#3a3a4a', h: 0.5 },
@@ -2235,30 +2271,67 @@ function Bookshelf({ onClick }: { onClick?: () => void }) {
           <cylinderGeometry args={[0.08, 0.07, 0.14, 16]} />
           <meshStandardMaterial color="#d4d0c8" roughness={0.5} />
         </mesh>
-        {/* Handle */}
         <mesh position={[0.1, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <torusGeometry args={[0.05, 0.015, 8, 16, Math.PI]} />
           <meshStandardMaterial color="#d4d0c8" roughness={0.5} />
         </mesh>
       </group>
+
+      {expanded && (
+        <mesh position={[-1.5, 0.05, 0.22]} rotation={[0, 0.45, 0]}>
+          <boxGeometry args={[0.16, 0.52, 0.28]} />
+          <meshStandardMaterial color="#d1b48f" roughness={0.55} />
+        </mesh>
+      )}
+
+      {hovered && (
+        <Html position={[0, 1.6, 0.4]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+Click to pull out a book
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
 
 // World Map on Wall
-function WorldMapDecor({ onClick }: { onClick?: () => void }) {
+function WorldMapDecor() {
+  const [hovered, setHovered] = useState(false)
+  const [pinPulse, setPinPulse] = useState(false)
+  useCursor(hovered)
+
   return (
-    <group position={[-4.5, 1.2, -3]} rotation={[0, 0.3, 0]} onClick={onClick}>
+    <group
+      position={[-4.5, 1.2, -3]}
+      rotation={[0, 0.3, 0]}
+      onClick={(e) => {
+        e.stopPropagation()
+        setPinPulse((prev) => !prev)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
       {/* Frame */}
       <mesh position={[0, 0, -0.02]}>
         <boxGeometry args={[2.2, 1.5, 0.06]} />
-        <meshStandardMaterial color="#3a2820" roughness={0.8} />
+        <meshStandardMaterial color={hovered ? "#4a3428" : "#3a2820"} roughness={0.7} />
       </mesh>
       {/* Map surface */}
       <mesh>
         <planeGeometry args={[2, 1.3]} />
         <meshStandardMaterial color="#e8e0d0" roughness={0.6} />
       </mesh>
+
+      {/* Interaction hitbox */}
+      <mesh position={[0, 0, 0.25]}>
+        <boxGeometry args={[2.4, 1.8, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
       {/* Continents (simplified shapes) */}
       <mesh position={[-0.5, 0.2, 0.01]}>
         <planeGeometry args={[0.6, 0.4]} />
@@ -2272,42 +2345,66 @@ function WorldMapDecor({ onClick }: { onClick?: () => void }) {
         <planeGeometry args={[0.3, 0.25]} />
         <meshStandardMaterial color="#9a9a8a" transparent opacity={0.6} />
       </mesh>
-      {/* Location pins */}
-      {[
-        [0.35, 0.15], // China area
-      ].map(([x, y], i) => (
-        <mesh key={i} position={[x, y, 0.02]}>
+
+      {[[0.35, 0.15]].map(([x, y], i) => (
+        <mesh key={i} position={[x, y, 0.02]} scale={pinPulse ? 1.45 : 1}>
           <circleGeometry args={[0.03, 16]} />
-          <meshBasicMaterial color="#E85D4C" />
+          <meshBasicMaterial color={pinPulse ? "#ffae52" : "#E85D4C"} />
         </mesh>
       ))}
+
+      {hovered && (
+        <Html position={[0, 1.05, 0.4]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+Click to highlight travel pins
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
 
 // Window with city view
 function WindowWithView() {
+  const [hovered, setHovered] = useState(false)
+  const [cityLightsOn, setCityLightsOn] = useState(true)
+  useCursor(hovered)
+
   return (
-    <group position={[4.5, 1.5, -2]} rotation={[0, -0.4, 0]}>
-      {/* Window frame - dark wood */}
+    <group
+      position={[4.5, 1.5, -2]}
+      rotation={[0, -0.4, 0]}
+      onClick={(e) => {
+        e.stopPropagation()
+        setCityLightsOn((prev) => !prev)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
       <mesh position={[0, 0, -0.1]}>
         <boxGeometry args={[2.4, 2, 0.15]} />
         <meshStandardMaterial color="#2a1810" roughness={0.85} />
       </mesh>
 
-      {/* Window glass - night city view (blue gradient) */}
       <mesh position={[0, 0, -0.02]}>
         <planeGeometry args={[2.1, 1.7]} />
         <meshStandardMaterial
-          color="#334455"
+          color={cityLightsOn ? "#334455" : "#223042"}
           roughness={0.1}
           metalness={0.3}
           transparent
-          opacity={0.85}
+          opacity={0.88}
         />
       </mesh>
 
-      {/* City silhouette */}
+      <mesh position={[0, 0, 0.2]}>
+        <boxGeometry args={[2.35, 1.9, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
       {[
         { x: -0.7, h: 0.4, w: 0.15 },
         { x: -0.45, h: 0.6, w: 0.18 },
@@ -2323,7 +2420,6 @@ function WindowWithView() {
         </mesh>
       ))}
 
-      {/* Window lights in buildings */}
       {[
         [-0.45, -0.3], [-0.45, -0.1], [-0.45, 0.1],
         [0.0, -0.3], [0.0, -0.1], [0.0, 0.1], [0.0, 0.3],
@@ -2331,11 +2427,10 @@ function WindowWithView() {
       ].map(([x, y], i) => (
         <mesh key={i} position={[x, y, 0]}>
           <planeGeometry args={[0.04, 0.03]} />
-          <meshBasicMaterial color="#ffcc88" transparent opacity={0.8} />
+          <meshBasicMaterial color="#ffcc88" transparent opacity={cityLightsOn ? 0.85 : 0.22} />
         </mesh>
       ))}
 
-      {/* Cross frame dividers */}
       <mesh position={[0, 0, 0.01]}>
         <boxGeometry args={[0.06, 1.7, 0.04]} />
         <meshStandardMaterial color="#3a2820" roughness={0.8} />
@@ -2345,55 +2440,126 @@ function WindowWithView() {
         <meshStandardMaterial color="#3a2820" roughness={0.8} />
       </mesh>
 
-      {/* Blue light from window */}
-      <pointLight position={[0, 0, 1]} intensity={1.2} color="#445566" distance={6} />
+      <pointLight position={[0, 0, 1]} intensity={cityLightsOn ? 1.35 : 0.7} color="#5f7fa6" distance={7} />
+
+      {hovered && (
+        <Html position={[0, 1.18, 0.32]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+            Click window to toggle city lights
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
 
 // Desk Lamp
 function DeskLamp({ lampOn, onClick }: { lampOn: boolean, onClick?: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  useCursor(hovered)
+
   return (
-    <group position={[-2.2, -1.98, 0.2]} onClick={onClick}>
-      {/* Invisible hitbox for easier clicking */}
-      <mesh position={[0, 0.4, -0.1]}>
-        <boxGeometry args={[0.6, 1.0, 0.6]} />
+    <group
+      position={[2.05, -1.995, 0.38]}
+      scale={1.22}
+      onClick={onClick}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
+      <mesh position={[0, 0.42, -0.12]}>
+        <boxGeometry args={[0.85, 1.15, 0.85]} />
         <meshBasicMaterial transparent opacity={0} />
       </mesh>
 
-      {/* Base */}
       <mesh position={[0, 0, 0]}>
-        <cylinderGeometry args={[0.2, 0.22, 0.05, 16]} />
-        <meshStandardMaterial color="#2a2a2a" roughness={0.4} metalness={0.6} />
+        <cylinderGeometry args={[0.24, 0.27, 0.06, 20]} />
+        <meshStandardMaterial color={hovered ? "#4a4a4a" : "#353535"} roughness={0.28} metalness={0.82} />
       </mesh>
 
-      {/* Arm - lower */}
-      <mesh position={[0, 0.25, 0]} rotation={[0.3, 0, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.5, 8]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.5} metalness={0.7} />
+      <mesh position={[0, 0.28, -0.02]} rotation={[0.35, 0, 0]}>
+        <cylinderGeometry args={[0.028, 0.028, 0.56, 10]} />
+        <meshStandardMaterial color="#222" roughness={0.35} metalness={0.84} />
       </mesh>
 
-      {/* Arm - upper */}
-      <mesh position={[0, 0.55, -0.15]} rotation={[-0.5, 0, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
-        <meshStandardMaterial color="#1a1a1a" roughness={0.5} metalness={0.7} />
+      <mesh position={[0, 0.63, -0.2]} rotation={[-0.58, 0, 0]}>
+        <cylinderGeometry args={[0.028, 0.028, 0.46, 10]} />
+        <meshStandardMaterial color="#222" roughness={0.35} metalness={0.84} />
       </mesh>
 
-      {/* Lamp shade */}
-      <mesh position={[0, 0.7, -0.3]} rotation={[0.6, 0, 0]}>
-        <coneGeometry args={[0.15, 0.2, 16, 1, true]} />
-        <meshStandardMaterial color="#2a2a2a" roughness={0.4} metalness={0.5} side={THREE.DoubleSide} />
+      <mesh position={[0, 0.82, -0.38]} rotation={[0.62, 0, 0]}>
+        <coneGeometry args={[0.19, 0.26, 20, 1, true]} />
+        <meshStandardMaterial
+          color="#2f2f2f"
+          roughness={0.3}
+          metalness={0.7}
+          side={THREE.DoubleSide}
+          emissive={lampOn ? "#3a240f" : "#000"}
+          emissiveIntensity={lampOn ? 0.35 : 0}
+        />
       </mesh>
 
-      {/* Warm light when on */}
       {lampOn && (
         <>
-          <pointLight position={[0, 0.6, -0.25]} intensity={3} color="#ff9944" distance={4} />
-          <mesh position={[0, 0.65, -0.28]}>
-            <sphereGeometry args={[0.04, 8, 8]} />
-            <meshBasicMaterial color="#ffcc88" />
+          <pointLight position={[0, 0.72, -0.32]} intensity={4.2} color="#ffb978" distance={6.5} />
+          <mesh position={[0, 0.76, -0.35]}>
+            <sphereGeometry args={[0.05, 10, 10]} />
+            <meshBasicMaterial color="#ffd79c" />
           </mesh>
         </>
+      )}
+
+      {hovered && (
+        <Html position={[0, 1.24, 0.25]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+            Click desk lamp to toggle lights
+          </div>
+        </Html>
+      )}
+    </group>
+  )
+}
+
+function DeskAccessories() {
+  const [hoveredKeyboard, setHoveredKeyboard] = useState(false)
+  useCursor(hoveredKeyboard)
+
+  return (
+    <group position={[0, -1.985, 0.42]}>
+      <group
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHoveredKeyboard(true)
+        }}
+        onPointerOut={() => setHoveredKeyboard(false)}
+      >
+        <mesh position={[0, 0.02, -0.3]}>
+          <boxGeometry args={[1.7, 0.05, 0.58]} />
+          <meshStandardMaterial color="#cfc6b8" roughness={0.52} metalness={0.06} />
+        </mesh>
+        {Array.from({ length: 9 }).map((_, r) =>
+          Array.from({ length: 24 }).map((__, c) => (
+            <mesh key={`${r}-${c}`} position={[-0.78 + c * 0.068, 0.055, -0.52 + r * 0.05]}>
+              <boxGeometry args={[0.05, 0.014, 0.035]} />
+              <meshStandardMaterial color="#f3efe8" roughness={0.45} />
+            </mesh>
+          ))
+        )}
+      </group>
+
+      <mesh position={[1.45, 0.025, 0.05]}>
+        <boxGeometry args={[0.42, 0.03, 0.52]} />
+        <meshStandardMaterial color="#d8d2c7" roughness={0.55} metalness={0.03} />
+      </mesh>
+
+      {hoveredKeyboard && (
+        <Html position={[0.25, 0.22, 0.12]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+            Keyboard detail
+          </div>
+        </Html>
       )}
     </group>
   )
@@ -2401,21 +2567,38 @@ function DeskLamp({ lampOn, onClick }: { lampOn: boolean, onClick?: () => void }
 
 // Decorative Plant
 function Plant() {
+  const [hovered, setHovered] = useState(false)
+  const [healthy, setHealthy] = useState(true)
+  useCursor(hovered)
+
   return (
-    <group position={[2.3, -1.98, 0.3]}>
-      {/* Pot */}
+    <group
+      position={[2.3, -1.98, 0.3]}
+      onClick={(e) => {
+        e.stopPropagation()
+        setHealthy((prev) => !prev)
+      }}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
       <mesh position={[0, 0.1, 0]}>
         <cylinderGeometry args={[0.15, 0.12, 0.2, 16]} />
         <meshStandardMaterial color="#5a4030" roughness={0.9} />
       </mesh>
 
-      {/* Soil */}
       <mesh position={[0, 0.2, 0]}>
         <cylinderGeometry args={[0.13, 0.13, 0.02, 16]} />
         <meshStandardMaterial color="#3a2a20" roughness={1} />
       </mesh>
 
-      {/* Leaves (monstera-style simplified) */}
+      <mesh position={[0, 0.35, 0]}>
+        <boxGeometry args={[0.5, 0.8, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
       {[
         { rx: -0.3, ry: 0, rz: 0.2, y: 0.4 },
         { rx: 0.2, ry: 1.5, rz: -0.3, y: 0.45 },
@@ -2424,38 +2607,52 @@ function Plant() {
       ].map((leaf, i) => (
         <mesh key={i} position={[0, leaf.y, 0]} rotation={[leaf.rx, leaf.ry, leaf.rz]}>
           <sphereGeometry args={[0.12, 8, 4, 0, Math.PI]} />
-          <meshStandardMaterial color="#2a6a3a" roughness={0.8} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={healthy ? "#2a6a3a" : "#628a52"} roughness={0.8} side={THREE.DoubleSide} />
         </mesh>
       ))}
+
+      {hovered && (
+        <Html position={[0, 0.95, 0.2]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+            Click plant to toggle health state
+          </div>
+        </Html>
+      )}
     </group>
   )
 }
 
 // Ceiling Light - Simple industrial Edison bulb pendant
 function CeilingLight({ isOn, onClick }: { isOn: boolean, onClick?: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  useCursor(hovered)
+
   return (
-    <group position={[0, 2.2, -0.5]} onClick={onClick}>
-      {/* Simple ceiling canopy */}
+    <group
+      position={[0, 2.2, -0.5]}
+      onClick={onClick}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
       <mesh position={[0, 0.35, 0]}>
         <cylinderGeometry args={[0.06, 0.08, 0.04, 16]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.6} metalness={0.4} />
       </mesh>
 
-      {/* Twisted fabric cord */}
       <mesh position={[0, 0.12, 0]}>
         <cylinderGeometry args={[0.012, 0.012, 0.42, 8]} />
         <meshStandardMaterial color="#2a2520" roughness={0.9} />
       </mesh>
 
-      {/* Brass socket */}
       <mesh position={[0, -0.12, 0]}>
         <cylinderGeometry args={[0.035, 0.04, 0.1, 12]} />
         <meshStandardMaterial color="#8b7355" roughness={0.3} metalness={0.7} />
       </mesh>
 
-      {/* Edison bulb - classic elongated shape */}
       <group position={[0, -0.26, 0]}>
-        {/* Bulb glass */}
         <mesh>
           <capsuleGeometry args={[0.05, 0.1, 8, 16]} />
           <meshStandardMaterial
@@ -2463,13 +2660,12 @@ function CeilingLight({ isOn, onClick }: { isOn: boolean, onClick?: () => void }
             roughness={0.1}
             metalness={0}
             transparent
-            opacity={0.85}
-            emissive={isOn ? "#ff9933" : "#000000"}
-            emissiveIntensity={isOn ? 0.6 : 0}
+            opacity={0.9}
+            emissive={isOn ? "#ffb15c" : "#1d1d1d"}
+            emissiveIntensity={isOn ? 0.75 : 0.15}
           />
         </mesh>
 
-        {/* Filament glow when on */}
         {isOn && (
           <mesh>
             <cylinderGeometry args={[0.006, 0.006, 0.06, 6]} />
@@ -2478,14 +2674,64 @@ function CeilingLight({ isOn, onClick }: { isOn: boolean, onClick?: () => void }
         )}
       </group>
 
-      {/* Light when on */}
       {isOn && (
         <pointLight
           position={[0, -0.26, 0]}
-          intensity={4}
-          color="#ffeecc"
-          distance={12}
+          intensity={5.5}
+          color="#ffe7bf"
+          distance={14}
         />
+      )}
+
+      <mesh position={[0, -0.26, 0]}>
+        <sphereGeometry args={[0.14, 10, 10]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
+      {hovered && (
+        <Html position={[0, -0.6, 0.4]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+Click pendant light to toggle main light
+          </div>
+        </Html>
+      )}
+    </group>
+  )
+}
+
+function WallLightSwitch({ isOn, onClick }: { isOn: boolean, onClick?: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  useCursor(hovered)
+
+  return (
+    <group
+      position={[-3.6, -0.4, -3.88]}
+      onClick={onClick}
+      onPointerOver={(e) => {
+        e.stopPropagation()
+        setHovered(true)
+      }}
+      onPointerOut={() => setHovered(false)}
+    >
+      <mesh>
+        <boxGeometry args={[0.32, 0.48, 0.04]} />
+        <meshStandardMaterial color="#ddd6c8" roughness={0.35} metalness={0.05} />
+      </mesh>
+      <mesh position={[0, isOn ? 0.06 : -0.06, 0.03]}>
+        <boxGeometry args={[0.12, 0.18, 0.03]} />
+        <meshStandardMaterial color={isOn ? "#f3efe6" : "#b8b2a8"} roughness={0.4} />
+      </mesh>
+      <mesh position={[0.11, -0.18, 0.04]}>
+        <sphereGeometry args={[0.015, 12, 12]} />
+        <meshBasicMaterial color={isOn ? "#66ff88" : "#445"} />
+      </mesh>
+
+      {hovered && (
+        <Html position={[0, 0.42, 0.1]} center>
+          <div style={{ background: 'rgba(0,0,0,0.72)', color: '#fff', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontFamily: 'Tahoma, sans-serif', whiteSpace: 'nowrap' }}>
+Click wall switch to toggle room light
+          </div>
+        </Html>
       )}
     </group>
   )
@@ -2500,10 +2746,10 @@ function Scene({
   scrollProgress,
   desktopIcons,
   lampOn,
+  computerOn,
   openPanels,
-  onClickBookshelf,
-  onClickWorldMap,
   onClickLamp,
+  onToggleComputerPower,
   onClosePanel,
   onOpenPanel,
   onFocusPanel,
@@ -2515,10 +2761,10 @@ function Scene({
   scrollProgress: number
   desktopIcons: DesktopIcon[]
   lampOn: boolean
+  computerOn: boolean
   openPanels: PanelId[]
-  onClickBookshelf?: () => void
-  onClickWorldMap?: () => void
   onClickLamp?: () => void
+  onToggleComputerPower?: () => void
   onClosePanel: (panel: PanelId) => void
   onOpenPanel: (panel: PanelId) => void
   onFocusPanel: (panel: PanelId) => void
@@ -2528,114 +2774,108 @@ function Scene({
       <CameraRig scrollProgress={scrollProgress} />
 
       {/* === LOFI ROOM LIGHTING === */}
-      {/* Soft ambient - brighter when lamp is on */}
-      <ambientLight intensity={lampOn ? 0.5 : 0.15} color={lampOn ? "#f5e8d8" : "#0a0805"} />
+      {/* Keep scene clearly readable even with lights off */}
+      <ambientLight intensity={lampOn ? 0.95 : 0.42} color={lampOn ? "#f8ecd9" : "#4f5f77"} />
+      <hemisphereLight intensity={lampOn ? 0.75 : 0.5} color={lampOn ? "#fff1dc" : "#6e85a8"} groundColor="#2b241d" />
 
-      {/* Main warm desk lamp light (when on) - fills the room */}
+      {/* Main ceiling light */}
       {lampOn && (
         <>
-          {/* Direct lamp light */}
-          <pointLight
-            position={[-2, 0, 1]}
-            intensity={3}
-            color="#ff9944"
-            distance={10}
-          />
-          {/* Bounced light filling the room */}
-          <pointLight
-            position={[0, 1, 0]}
-            intensity={1.5}
-            color="#ffcc88"
-            distance={12}
-          />
+          <pointLight position={[0, 1.9, -0.4]} intensity={7.2} color="#ffe7c6" distance={18} />
+          <pointLight position={[0, 0.7, -0.4]} intensity={3.2} color="#ffd7a8" distance={14} />
         </>
       )}
 
-      {/* Subtle fill from right - window light */}
+      {/* Desk lamp fill */}
+      {lampOn && (
+        <pointLight
+          position={[2.1, -1.15, 0.8]}
+          intensity={3.5}
+          color="#ffb066"
+          distance={9.5}
+        />
+      )}
+
+      {/* Window moonlight fill */}
       <pointLight
         position={[5, 2, 0]}
-        intensity={lampOn ? 0.6 : 1.2}
-        color="#445566"
-        distance={10}
+        intensity={lampOn ? 0.8 : 1.7}
+        color="#7a98c2"
+        distance={14}
       />
 
-      {/* Soft overhead fill */}
-      <pointLight
-        position={[0, 4, 2]}
-        intensity={lampOn ? 0.3 : 0.6}
-        color="#554433"
-        distance={12}
-      />
+      {/* Front fill for object readability */}
+      <directionalLight position={[2.5, 2.2, 4.5]} intensity={lampOn ? 0.5 : 0.72} color="#a8c0df" />
 
-      {/* Screen glow when on - softer, teal tinted */}
-      {phase !== 'startup' && (
-        <pointLight position={[0, 0, 2.5]} intensity={0.8} color="#5A9A9A" distance={5} />
+      {/* Screen glow when on */}
+      {computerOn && phase !== 'startup' && (
+        <pointLight position={[0, 0, 2.5]} intensity={1.25} color="#8ad2d2" distance={7} />
       )}
 
       {/* ===== LOFI ROOM ===== */}
       {/* Floor - dark wood planks */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]} receiveShadow>
         <planeGeometry args={[25, 20]} />
-        <meshStandardMaterial color="#1a1210" roughness={0.85} metalness={0.05} />
+        <meshStandardMaterial color="#4a3529" roughness={0.78} metalness={0.03} />
       </mesh>
 
       {/* Wood floor plank lines */}
       {[-6, -3, 0, 3, 6].map((x) => (
         <mesh key={`plank-${x}`} position={[x, -2.49, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[0.02, 20]} />
-          <meshStandardMaterial color="#0a0805" transparent opacity={0.3} />
+          <meshStandardMaterial color="#17110d" transparent opacity={0.24} />
         </mesh>
       ))}
 
-      {/* Back wall - dark warm */}
+      {/* Back wall - warmer and brighter for readability */}
       <mesh position={[0, 2, -4]}>
         <planeGeometry args={[30, 15]} />
-        <meshStandardMaterial color="#0f0d0a" roughness={0.95} />
+        <meshStandardMaterial color="#3f352b" roughness={0.84} />
       </mesh>
 
       {/* Left wall */}
       <mesh position={[-10, 2, 2]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[15, 12]} />
-        <meshStandardMaterial color="#0d0a08" roughness={0.95} />
+        <meshStandardMaterial color="#372f27" roughness={0.86} />
       </mesh>
 
       {/* Right wall */}
       <mesh position={[10, 2, 2]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[15, 12]} />
-        <meshStandardMaterial color="#0d0a08" roughness={0.95} />
+        <meshStandardMaterial color="#372f27" roughness={0.86} />
       </mesh>
 
       {/* ===== WOODEN DESK ===== */}
-      {/* Desktop surface - warm dark wood */}
       <mesh position={[0, -2.05, -0.5]} receiveShadow>
-        <boxGeometry args={[6, 0.12, 3]} />
-        <meshStandardMaterial color="#2a1810" roughness={0.75} metalness={0.02} />
+        <boxGeometry args={[5.2, 0.1, 2.4]} />
+        <meshStandardMaterial color="#4a3124" roughness={0.68} metalness={0.02} />
       </mesh>
 
-      {/* Desk front edge trim */}
-      <mesh position={[0, -2.05, 1]}>
-        <boxGeometry args={[6, 0.08, 0.08]} />
-        <meshStandardMaterial color="#3a2820" roughness={0.7} />
+      <mesh position={[0, -2.05, 0.69]}>
+        <boxGeometry args={[5.2, 0.08, 0.08]} />
+        <meshStandardMaterial color="#5a3b2b" roughness={0.65} />
       </mesh>
 
-      {/* Desk legs - wood */}
-      {[[-2.7, -2.5, -1.8], [2.7, -2.5, -1.8], [-2.7, -2.5, 0.7], [2.7, -2.5, 0.7]].map((pos, i) => (
+      {[[-2.3, -2.5, -1.55], [2.3, -2.5, -1.55], [-2.3, -2.5, 0.45], [2.3, -2.5, 0.45]].map((pos, i) => (
         <mesh key={i} position={pos as [number, number, number]}>
           <boxGeometry args={[0.1, 0.9, 0.1]} />
-          <meshStandardMaterial color="#2a1810" roughness={0.8} />
+          <meshStandardMaterial color="#3f2b20" roughness={0.74} />
         </mesh>
       ))}
 
       {/* ===== ROOM DECORATIONS ===== */}
-      <Bookshelf onClick={onClickBookshelf} />
-      <WorldMapDecor onClick={onClickWorldMap} />
+      <Bookshelf />
+      <WorldMapDecor />
       <WindowWithView />
+      <DeskAccessories />
       <DeskLamp lampOn={lampOn} onClick={onClickLamp} />
+      <CeilingLight isOn={lampOn} onClick={onClickLamp} />
+      <WallLightSwitch isOn={lampOn} onClick={onClickLamp} />
       <Plant />
 
       {/* The CRT Monitor */}
       <CRTMonitor3D
-        screenOn={phase !== 'startup'}
+        screenOn={computerOn && phase !== 'startup'}
         biosLines={biosLines}
         bootLines={bootLines}
         loadingProgress={loadingProgress}
@@ -2645,6 +2885,7 @@ function Scene({
         onClosePanel={onClosePanel}
         onOpenPanel={onOpenPanel}
         onFocusPanel={onFocusPanel}
+        onTogglePower={onToggleComputerPower}
       />
     </>
   )
@@ -2665,6 +2906,7 @@ export function BootSequence3D({
   const [biosLine, setBiosLine] = useState(0)
   const [bootLine, setBootLine] = useState(0)
   const [loadingProgress, setLoadingProgress] = useState(0)
+  const [computerOn, setComputerOn] = useState(true)
 
   // Desktop icons configuration
   const desktopIcons: DesktopIcon[] = [
@@ -2765,7 +3007,11 @@ export function BootSequence3D({
       <Canvas
         camera={{ position: [3, 1, 10], fov: 45 }}
         shadows
-        gl={{ antialias: true }}
+        dpr={[1, 1.75]}
+        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, outputColorSpace: THREE.SRGBColorSpace }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 1.35
+        }}
       >
         <Suspense fallback={null}>
           <Scene
@@ -2776,10 +3022,10 @@ export function BootSequence3D({
             scrollProgress={scrollProgress}
             desktopIcons={desktopIcons}
             lampOn={lampOn}
+            computerOn={computerOn}
             openPanels={openPanels ?? []}
-            onClickBookshelf={() => onOpenPanel?.('about')}
-            onClickWorldMap={() => onOpenPanel?.('travel')}
             onClickLamp={() => onToggleLamp?.()}
+            onToggleComputerPower={() => setComputerOn((prev) => !prev)}
             onClosePanel={(panel) => onClosePanel?.(panel)}
             onOpenPanel={(panel) => onOpenPanel?.(panel)}
             onFocusPanel={(panel) => onFocusPanel?.(panel)}
