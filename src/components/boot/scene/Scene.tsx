@@ -11,7 +11,7 @@ import { Plant } from './Plant'
 import { DeskAccessories } from './DeskAccessories'
 import { CoffeeMug } from './CoffeeMug'
 import { CRTMonitor } from './CRTMonitor'
-import { DustMotes } from './Atmosphere'
+import { PostProcessing, SceneEnvironment } from './Atmosphere'
 
 interface SceneProps {
   phase: Phase
@@ -37,6 +37,8 @@ export function Scene(props: SceneProps) {
       <CameraRig scrollProgress={props.scrollProgress} />
       <Lighting lampOn={props.lampOn} computerOn={props.computerOn} phase={props.phase} />
 
+      <SceneEnvironment lampOn={props.lampOn} />
+
       <Room />
       <Bookshelf />
       <WorldMap />
@@ -47,7 +49,6 @@ export function Scene(props: SceneProps) {
       <DeskLamp on={props.lampOn} onToggle={props.onToggleLamp} />
       <CeilingLight on={props.lampOn} onToggle={props.onToggleLamp} />
       <WallSwitch on={props.lampOn} onToggle={props.onToggleLamp} />
-      <DustMotes visible={props.lampOn} />
 
       {/* Soft contact shadow under everything desk-height — anchors objects to the desktop. */}
       <ContactShadows
@@ -73,6 +74,8 @@ export function Scene(props: SceneProps) {
         onFocusPanel={props.onFocusPanel}
         onTogglePower={props.onTogglePower}
       />
+
+      <PostProcessing />
     </>
   )
 }

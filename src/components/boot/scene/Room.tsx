@@ -1,6 +1,10 @@
+import { MeshReflectorMaterial } from '@react-three/drei'
+
 /**
- * Floor, back/side walls, the wooden desk and its legs. Receives shadows so
- * `ContactShadows` from drei can ground objects against it.
+ * Floor, back/side walls, the wooden desk and its legs. The desk surface
+ * uses MeshReflectorMaterial so the warm pendant and CRT glow pool gently
+ * across the wood — that subtle reflection is what makes the room feel
+ * "real" instead of "flat".
  */
 const FLOOR_PLANK_COLUMNS = [-6, -3, 0, 3, 6] as const
 const DESK_LEGS: ReadonlyArray<readonly [number, number, number]> = [
@@ -58,10 +62,11 @@ function Walls() {
         <planeGeometry args={[15, 12]} />
         <meshStandardMaterial color="#332a25" roughness={0.92} />
       </mesh>
-      {/* Subtle wall picture-rail trim — long thin plank along the back wall */}
-      <mesh position={[0, 0.6, -3.97]}>
-        <boxGeometry args={[18, 0.06, 0.04]} />
-        <meshStandardMaterial color="#2a1f17" roughness={0.85} />
+
+      {/* Skirting board along the floor / back wall */}
+      <mesh position={[0, -2.18, -3.96]}>
+        <boxGeometry args={[20, 0.18, 0.05]} />
+        <meshStandardMaterial color="#1d140e" roughness={0.85} />
       </mesh>
     </>
   )
@@ -70,10 +75,31 @@ function Walls() {
 function Desk() {
   return (
     <>
-      {/* Desktop surface */}
-      <mesh position={[0, DESK_TOP, -0.5]} receiveShadow>
-        <boxGeometry args={[5.2, 0.1, 2.4]} />
-        <meshStandardMaterial color="#4a3124" roughness={0.65} metalness={0.04} />
+      {/* Desk core (matte underside + front face) */}
+      <mesh position={[0, DESK_TOP - 0.025, -0.5]} receiveShadow castShadow>
+        <boxGeometry args={[5.2, 0.05, 2.4]} />
+        <meshStandardMaterial color="#3a2618" roughness={0.85} />
+      </mesh>
+      {/* Reflective top (subtle, low-res for performance) */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, DESK_TOP + 0.001, -0.5]}
+        receiveShadow
+      >
+        <planeGeometry args={[5.2, 2.4]} />
+        <MeshReflectorMaterial
+          color="#4a3124"
+          roughness={0.78}
+          metalness={0.05}
+          mirror={0.18}
+          mixBlur={2.6}
+          mixStrength={0.55}
+          blur={[200, 80]}
+          resolution={512}
+          minDepthThreshold={0.6}
+          maxDepthThreshold={1.2}
+          depthScale={1.2}
+        />
       </mesh>
       {/* Front edge trim */}
       <mesh position={[0, DESK_TOP, 0.69]}>

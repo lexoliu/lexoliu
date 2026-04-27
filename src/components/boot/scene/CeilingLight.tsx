@@ -76,26 +76,36 @@ interface WallSwitchProps {
 export function WallSwitch({ on, onToggle }: WallSwitchProps) {
   const [hovered, setHovered] = useState(false)
   useCursor(hovered)
+  // Z layout (origin sits 0.04 in front of the wall):
+  //   plate front  z = 0.04
+  //   toggle front z = 0.10
+  //   LED          z = 0.12
   return (
-    // Mounted on the back wall just left of the bookshelf so it's visible
-    // past the monitor's silhouette in the room view.
     <group
-      position={[-2.5, -0.4, -3.95]}
+      position={[-2.5, -0.4, -3.96]}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true) }}
       onPointerOut={() => setHovered(false)}
     >
-      <mesh>
-        <boxGeometry args={[0.32, 0.48, 0.04]} />
-        <meshStandardMaterial color={hovered ? '#ece5d6' : '#ddd6c8'} roughness={0.35} metalness={0.05} />
+      {/* Wall plate */}
+      <mesh position={[0, 0, 0.02]}>
+        <boxGeometry args={[0.34, 0.5, 0.035]} />
+        <meshStandardMaterial color={hovered ? '#f1ebde' : '#e6dfd1'} roughness={0.45} metalness={0.04} />
       </mesh>
-      <mesh position={[0, on ? 0.06 : -0.06, 0.03]}>
-        <boxGeometry args={[0.12, 0.18, 0.03]} />
-        <meshStandardMaterial color={on ? '#f3efe6' : '#b8b2a8'} roughness={0.4} />
+      {/* Toggle (protruding rocker) */}
+      <mesh position={[0, on ? 0.05 : -0.05, 0.052]}>
+        <boxGeometry args={[0.12, 0.18, 0.04]} />
+        <meshStandardMaterial color={on ? '#fbf6e8' : '#aaa39a'} roughness={0.5} />
       </mesh>
-      <mesh position={[0.11, -0.18, 0.04]}>
-        <sphereGeometry args={[0.015, 12, 12]} />
-        <meshBasicMaterial color={on ? '#66ff88' : '#445'} toneMapped={false} />
+      {/* Status LED */}
+      <mesh position={[0.115, -0.21, 0.04]}>
+        <sphereGeometry args={[0.012, 16, 16]} />
+        <meshStandardMaterial
+          color={on ? '#9bff9b' : '#3a4651'}
+          emissive={on ? '#46ff62' : '#000'}
+          emissiveIntensity={on ? 1.6 : 0}
+          roughness={0.3}
+        />
       </mesh>
     </group>
   )
