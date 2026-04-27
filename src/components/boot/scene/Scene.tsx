@@ -34,6 +34,10 @@ interface SceneProps {
 export function Scene(props: SceneProps) {
   return (
     <>
+      {/* Subtle haze so the back wall recedes — colour matches the deepest
+          wall tone so it never reads as grey fog, just air. */}
+      <fog attach="fog" args={[props.lampOn ? '#1c130c' : '#0e1422', 10, 22]} />
+
       <CameraRig scrollProgress={props.scrollProgress} />
       <Lighting lampOn={props.lampOn} computerOn={props.computerOn} phase={props.phase} />
 
