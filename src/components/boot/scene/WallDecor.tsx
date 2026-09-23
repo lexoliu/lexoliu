@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { palette } from '../shared'
 
 interface FramedArtProps {
@@ -79,10 +80,17 @@ const CONTINENTS: ReadonlyArray<{ pos: [number, number, number]; size: [number, 
 const LATITUDE_LINES = [-0.45, -0.22, 0, 0.22, 0.45] as const
 const LONGITUDE_LINES = [-0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75] as const
 
+const TRAVEL_PINS: ReadonlyArray<{ x: number; y: number; color: string; halo?: boolean }> = [
+  { x: 0.46, y: 0.22, color: '#E85D4C', halo: true }, // Hangzhou (home)
+  { x: -0.52, y: 0.30, color: '#4ca2e8' },             // NYC
+  { x: -0.18, y: 0.32, color: '#4ca2e8' },             // London
+  { x: 0.62, y: -0.32, color: '#4ca2e8' },             // Sydney
+  { x: -0.40, y: -0.05, color: '#4ca2e8' },            // Lima
+]
+
 /**
- * Framed world map on the back wall. Hangzhou (the user's home city) is
- * marked with an accent pin and a soft halo so it reads even from the
- * pulled-back camera.
+ * Framed world map on the back wall. Hangzhou (the user's home city) gets the
+ * accent halo; other dots are travel goals — fits the wanderlust dorm vibe.
  */
 export function WorldMap() {
   return (
@@ -118,16 +126,21 @@ export function WorldMap() {
           <meshStandardMaterial color="#a8a07e" roughness={0.85} />
         </mesh>
       ))}
-      {/* Travel pin on Hangzhou (eastern Asia) */}
-      <mesh position={[0.46, 0.22, 0.018]}>
-        <sphereGeometry args={[0.028, 16, 16]} />
-        <meshStandardMaterial color={palette.accent} emissive={palette.accent} emissiveIntensity={0.4} roughness={0.45} />
-      </mesh>
-      {/* Pin halo */}
-      <mesh position={[0.46, 0.22, 0.013]}>
-        <ringGeometry args={[0.04, 0.07, 24]} />
-        <meshBasicMaterial color={palette.accent} transparent opacity={0.35} toneMapped={false} side={THREE.DoubleSide} />
-      </mesh>
+      {/* Travel pins */}
+      {TRAVEL_PINS.map((p, i) => (
+        <group key={i} position={[p.x, p.y, 0.018]}>
+          <mesh>
+            <sphereGeometry args={[0.024, 16, 16]} />
+            <meshStandardMaterial color={p.color} emissive={p.color} emissiveIntensity={p.halo ? 0.5 : 0.25} roughness={0.45} />
+          </mesh>
+          {p.halo && (
+            <mesh position={[0, 0, -0.005]}>
+              <ringGeometry args={[0.04, 0.07, 24]} />
+              <meshBasicMaterial color={p.color} transparent opacity={0.35} toneMapped={false} side={THREE.DoubleSide} />
+            </mesh>
+          )}
+        </group>
+      ))}
       {/* Title bar across the top of the paper */}
       <mesh position={[0, 0.55, 0.004]}>
         <planeGeometry args={[1.92, 0.06]} />
@@ -142,55 +155,158 @@ export function WorldMap() {
   )
 }
 
+const TOUR_DATES = [-0.32, -0.12, 0.08, 0.28] as const
+
 /**
- * A dense, mixed-height skyline. We lean into variety — a few tall towers
- * with antennas and many lower buildings so the silhouette has rhythm.
+ * Taped-up dorm-style band poster — placed on the right wall as a separate
+ * element from the world map.
  */
-const BUILDINGS: ReadonlyArray<{ x: number; h: number; w: number; antenna?: number }> = [
-  { x: -0.95, h: 0.30, w: 0.10 },
-  { x: -0.82, h: 0.46, w: 0.14 },
-  { x: -0.66, h: 0.38, w: 0.12 },
-  { x: -0.50, h: 0.66, w: 0.18, antenna: 0.18 },
-  { x: -0.32, h: 0.32, w: 0.12 },
-  { x: -0.16, h: 0.50, w: 0.14 },
-  { x: 0.00, h: 0.86, w: 0.20, antenna: 0.24 },
-  { x: 0.18, h: 0.42, w: 0.14 },
-  { x: 0.34, h: 0.58, w: 0.16 },
-  { x: 0.50, h: 0.34, w: 0.12 },
-  { x: 0.62, h: 0.72, w: 0.18, antenna: 0.16 },
-  { x: 0.78, h: 0.40, w: 0.14 },
-  { x: 0.92, h: 0.30, w: 0.10 },
+export function DormPoster() {
+  // Back wall at z=-4. Place between bookshelf (x range [-1.75, 1.75]) and
+  // the window's projected x range to the right. With poster width 1.0,
+  // x=2.5 → [2.0, 3.0] sits in the gap before window left x=3.225.
+  return (
+    <group position={[2.5, 0.7, -3.93]}>
+      <mesh>
+        <planeGeometry args={[1.0, 1.4]} />
+        <meshStandardMaterial color="#f0e6d0" roughness={0.92} emissive="#1a140c" emissiveIntensity={0.15} />
+      </mesh>
+      <mesh position={[0, 0.5, 0.003]}>
+        <planeGeometry args={[1.0, 0.34]} />
+        <meshBasicMaterial color="#d33672" toneMapped={false} />
+      </mesh>
+      <mesh position={[0.1, 0.32, 0.004]} rotation={[0, 0, -0.32]}>
+        <planeGeometry args={[1.4, 0.05]} />
+        <meshBasicMaterial color="#f5c84d" toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.0, 0.005]}>
+        <planeGeometry args={[0.6, 0.8]} />
+        <meshBasicMaterial color="#1a1a1a" toneMapped={false} />
+      </mesh>
+      <mesh position={[-0.05, 0.1, 0.006]}>
+        <circleGeometry args={[0.1, 24]} />
+        <meshBasicMaterial color="#f0e6d0" toneMapped={false} />
+      </mesh>
+      <mesh position={[0, -0.55, 0.003]}>
+        <planeGeometry args={[0.95, 0.1]} />
+        <meshBasicMaterial color="#1a1a1a" toneMapped={false} />
+      </mesh>
+      {TOUR_DATES.map((y) => (
+        <mesh key={y} position={[y * 0.55, -0.55, 0.005]}>
+          <planeGeometry args={[0.08, 0.025]} />
+          <meshBasicMaterial color="#f5c84d" toneMapped={false} />
+        </mesh>
+      ))}
+      {[[-0.45, 0.65], [0.45, 0.65], [-0.45, -0.65], [0.45, -0.65]].map(([tx, ty], i) => (
+        <mesh key={i} position={[tx, ty, 0.012]} rotation={[0, 0, i % 2 ? -0.4 : 0.4]}>
+          <planeGeometry args={[0.12, 0.035]} />
+          <meshBasicMaterial color="#f8f3d8" toneMapped={false} transparent opacity={0.75} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+interface SkylineLayer {
+  /** Building base y (bottom of tallest face is at base + 0). */
+  baseY: number
+  /** Z depth in window-local space. Deeper layers are smaller & more hazy. */
+  z: number
+  /** Tint color — far layers fade toward the sky. */
+  color: string
+  /** Window light tint — far layers cool & dim. */
+  windowColor: string
+  windowOpacity: number
+  /** Width range and density. */
+  count: number
+  minH: number
+  maxH: number
+  spread: number
+  seed: number
+}
+
+const SKYLINE_LAYERS: ReadonlyArray<SkylineLayer> = [
+  // Far horizon — hazy violet, cool window mix
+  { baseY: -0.42, z: 0.011, color: '#1a2244', windowColor: '#b6c8e8', windowOpacity: 0.6,
+    count: 28, minH: 0.10, maxH: 0.28, spread: 2.16, seed: 0xa1f3 },
+  // Mid distance — defined silhouette, predominantly warm
+  { baseY: -0.50, z: 0.018, color: '#0c1430', windowColor: '#ffcc7a', windowOpacity: 1.0,
+    count: 18, minH: 0.22, maxH: 0.58, spread: 2.10, seed: 0x12b7 },
+  // Near foreground — sharpest, biggest windows, towers with antennas
+  { baseY: -0.55, z: 0.026, color: '#05081a', windowColor: '#ffd890', windowOpacity: 1.0,
+    count: 11, minH: 0.34, maxH: 0.85, spread: 2.0, seed: 0x77c1 },
 ]
 
-/** Window ranges the rng picks from per building face — one entry per column. */
-const WINDOW_GRID: ReadonlyArray<[number, number]> = [
-  [-0.5, -0.32], [-0.5, -0.12], [-0.5, 0.08], [-0.5, 0.22],
-  [-0.16, -0.18], [-0.16, 0.02], [-0.16, 0.20],
-  [0.00, -0.35], [0.00, -0.15], [0.00, 0.05], [0.00, 0.25], [0.00, 0.45], [0.00, 0.6],
-  [0.18, -0.18], [0.18, 0.05], [0.18, 0.18],
-  [0.34, -0.05], [0.34, 0.15], [0.34, 0.32],
-  [0.62, -0.22], [0.62, 0.0], [0.62, 0.22], [0.62, 0.40],
-  [-0.82, -0.18], [-0.82, 0.02], [-0.82, 0.18],
-  [0.78, -0.05], [0.78, 0.10],
-]
+interface Building {
+  x: number
+  h: number
+  w: number
+  antenna?: number
+  /** Lit window cells [colX, rowY] in building-local coords. */
+  windows: ReadonlyArray<[number, number]>
+}
 
-const STAR_COUNT = 38
+function generateLayer(layer: SkylineLayer): Building[] {
+  const rng = mulberry32(layer.seed)
+  const result: Building[] = []
+  const step = layer.spread / layer.count
+  for (let i = 0; i < layer.count; i++) {
+    const x = -layer.spread / 2 + step * (i + 0.5) + (rng() - 0.5) * step * 0.5
+    const h = layer.minH + rng() * (layer.maxH - layer.minH)
+    const w = step * (0.55 + rng() * 0.4)
+    const antenna = rng() > 0.78 ? 0.12 + rng() * 0.18 : undefined
+    // Procedural window grid — fewer at far layers
+    const cols = Math.max(1, Math.floor(w / 0.04))
+    const rows = Math.max(1, Math.floor(h / 0.05))
+    const windows: [number, number][] = []
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        if (rng() < 0.42) {
+          const wx = -w / 2 + (c + 0.5) * (w / cols)
+          const wy = -h / 2 + (r + 0.5) * (h / rows)
+          windows.push([wx, wy])
+        }
+      }
+    }
+    result.push({ x, h, w, antenna, windows })
+  }
+  return result
+}
+
+const STAR_COUNT = 64
+const TWINKLE_COUNT = 6
 
 /**
- * Window with night-city silhouette. The pane is a clear glass-ish
- * material; building silhouettes, stars, moon and warm window-lights are
- * rendered as stacked planes well in front of the pane to avoid any
- * z-fighting.
+ * Layered night cityscape window. Three depth-stacked silhouette layers
+ * create parallax & atmospheric perspective; warm/cool window lights are
+ * generated procedurally per building; aviation warning lights blink; a
+ * handful of bright stars twinkle. All decorative geometry sits in front of
+ * the dark-blue sky plane so there is no z-fighting against the wall.
  */
 export function NightWindow() {
-  // Scatter stars deterministically so hot-reload doesn't shimmer them
+  const layers = useMemo(
+    () => SKYLINE_LAYERS.map((l) => ({ layer: l, buildings: generateLayer(l) })),
+    [],
+  )
+
   const stars = useMemo(() => {
     const rng = mulberry32(0x5a17)
     return Array.from({ length: STAR_COUNT }, () => ({
-      x: (rng() - 0.5) * 2.0,
-      y: 0.2 + rng() * 0.7,           // upper half of the sky only
-      r: 0.004 + rng() * 0.008,
-      i: 0.55 + rng() * 0.45,
+      x: (rng() - 0.5) * 2.05,
+      y: -0.1 + rng() * 0.95,
+      r: 0.003 + rng() * 0.007,
+      i: 0.4 + rng() * 0.55,
+    }))
+  }, [])
+
+  const twinkleStars = useMemo(() => {
+    const rng = mulberry32(0xbeef)
+    return Array.from({ length: TWINKLE_COUNT }, () => ({
+      x: (rng() - 0.5) * 1.9,
+      y: 0.15 + rng() * 0.7,
+      r: 0.009 + rng() * 0.006,
+      phase: rng() * Math.PI * 2,
+      speed: 1.4 + rng() * 1.6,
     }))
   }, [])
 
@@ -203,91 +319,87 @@ export function NightWindow() {
       </mesh>
 
       {/* Sill */}
-      <mesh position={[0, -1.08, 0.05]}>
+      <mesh position={[0, -1.08, 0.05]} castShadow receiveShadow>
         <boxGeometry args={[2.7, 0.12, 0.32]} />
         <meshStandardMaterial color="#2a1d14" roughness={0.7} />
       </mesh>
 
-      {/* Sky base — dark blue, slightly emissive so it reads in dim ambience */}
+      {/* === Sky === Stacked translucent gradient bands sell the depth. */}
+      {/* Deepest indigo — basic material untoned so it stays vivid at night.
+          A standard material here would crush to black under ACES tonemap. */}
       <mesh position={[0, 0, -0.005]}>
         <planeGeometry args={[2.2, 1.78]} />
-        <meshStandardMaterial color="#10182e" emissive="#1c2a4a" emissiveIntensity={0.55} roughness={0.4} />
+        <meshBasicMaterial color="#2a4a98" toneMapped={false} fog={false} />
       </mesh>
-
-      {/* Horizon glow — warm orange-purple band where the city meets the sky */}
-      <mesh position={[0, -0.45, 0.004]}>
-        <planeGeometry args={[2.2, 0.42]} />
-        <meshBasicMaterial color="#3a2244" toneMapped={false} transparent opacity={0.85} />
+      {/* Mid-sky violet wash near the horizon */}
+      <mesh position={[0, -0.05, 0.002]}>
+        <planeGeometry args={[2.2, 1.5]} />
+        <meshBasicMaterial color="#352a66" toneMapped={false} transparent opacity={0.6} />
       </mesh>
-      <mesh position={[0, -0.58, 0.005]}>
+      {/* Horizon haze: violet → magenta → amber */}
+      <mesh position={[0, -0.30, 0.004]}>
+        <planeGeometry args={[2.2, 0.6]} />
+        <meshBasicMaterial color="#33214a" toneMapped={false} transparent opacity={0.85} />
+      </mesh>
+      <mesh position={[0, -0.45, 0.005]}>
+        <planeGeometry args={[2.2, 0.32]} />
+        <meshBasicMaterial color="#5a2c4a" toneMapped={false} transparent opacity={0.78} />
+      </mesh>
+      <mesh position={[0, -0.55, 0.006]}>
         <planeGeometry args={[2.2, 0.18]} />
-        <meshBasicMaterial color="#5a3a3a" toneMapped={false} transparent opacity={0.7} />
+        <meshBasicMaterial color="#774032" toneMapped={false} transparent opacity={0.65} />
       </mesh>
 
       {/* Stars */}
       {stars.map((s, i) => (
-        <mesh key={i} position={[s.x, s.y, 0.006]}>
+        <mesh key={i} position={[s.x, s.y, 0.007]}>
           <circleGeometry args={[s.r, 8]} />
           <meshBasicMaterial color="#fffaea" transparent opacity={s.i} toneMapped={false} />
         </mesh>
       ))}
+      {/* Twinkling bright stars */}
+      {twinkleStars.map((s, i) => (
+        <TwinkleStar key={i} {...s} />
+      ))}
 
-      {/* Distant moon halo (soft) */}
-      <mesh position={[0.6, 0.42, 0.008]}>
-        <circleGeometry args={[0.22, 32]} />
-        <meshBasicMaterial color="#fff5d6" transparent opacity={0.18} toneMapped={false} />
-      </mesh>
-      {/* Moon */}
-      <mesh position={[0.6, 0.42, 0.012]}>
-        <circleGeometry args={[0.1, 32]} />
-        <meshBasicMaterial color="#fff5d6" toneMapped={false} />
-      </mesh>
+      {/* Moon: outer halo, soft glow, disc, subtle craters.
+          Z above all skyline layers so buildings never occlude it. */}
+      <Moon position={[0.55, 0.5, 0.030]} />
 
-      {/* Distant hill silhouette behind buildings */}
-      <mesh position={[0, -0.42, 0.014]}>
-        <planeGeometry args={[2.2, 0.32]} />
-        <meshBasicMaterial color="#0c1024" toneMapped={false} transparent opacity={0.85} />
+      {/* Distant ridge/hill silhouette — anchors mid-distance */}
+      <mesh position={[0, -0.5, 0.013]}>
+        <planeGeometry args={[2.2, 0.18]} />
+        <meshBasicMaterial color="#070b1a" toneMapped={false} transparent opacity={0.9} />
       </mesh>
 
-      {/* Building silhouettes */}
-      {BUILDINGS.map((b, i) => (
-        <group key={i} position={[b.x, -0.55 + b.h / 2, 0.018]}>
-          <mesh>
-            <planeGeometry args={[b.w, b.h]} />
-            <meshBasicMaterial color="#070b1a" toneMapped={false} />
-          </mesh>
-          {b.antenna !== undefined && (
-            <>
-              <mesh position={[0, b.h / 2 + b.antenna / 2, 0.001]}>
-                <planeGeometry args={[0.005, b.antenna]} />
-                <meshBasicMaterial color="#070b1a" toneMapped={false} />
-              </mesh>
-              {/* Aviation warning light at top of antenna */}
-              <mesh position={[0, b.h / 2 + b.antenna, 0.002]}>
-                <circleGeometry args={[0.008, 8]} />
-                <meshBasicMaterial color="#ff4040" toneMapped={false} />
-              </mesh>
-            </>
-          )}
+      {/* === Skyline layers, far → near === */}
+      {layers.map(({ layer, buildings }, li) => (
+        <group key={li} position={[0, 0, layer.z]}>
+          {buildings.map((b, bi) => (
+            <BuildingSilhouette key={bi} building={b} layer={layer} index={li * 1000 + bi} />
+          ))}
         </group>
       ))}
 
-      {/* Lit windows (warm) — drawn in front of building faces */}
-      {WINDOW_GRID.map(([x, y], i) => (
-        <mesh key={i} position={[x, y, 0.025]}>
-          <planeGeometry args={[0.028, 0.022]} />
-          <meshBasicMaterial color="#ffd28a" toneMapped={false} />
-        </mesh>
-      ))}
-
-      {/* Cross dividers (in front of glass) */}
+      {/* Cross dividers (mullions) in front of glass */}
       <mesh position={[0, 0, 0.05]}>
-        <boxGeometry args={[0.07, 1.78, 0.06]} />
-        <meshStandardMaterial color={'#1f130c'} roughness={0.7} />
+        <boxGeometry args={[0.05, 1.78, 0.05]} />
+        <meshStandardMaterial color="#1f130c" roughness={0.7} />
       </mesh>
       <mesh position={[0, 0, 0.05]}>
-        <boxGeometry args={[2.2, 0.07, 0.06]} />
-        <meshStandardMaterial color={'#1f130c'} roughness={0.7} />
+        <boxGeometry args={[2.2, 0.05, 0.05]} />
+        <meshStandardMaterial color="#1f130c" roughness={0.7} />
+      </mesh>
+      {/* Sash horizontal at 1/3 height for a more believable casement */}
+      <mesh position={[0, 0.45, 0.05]}>
+        <boxGeometry args={[2.2, 0.025, 0.05]} />
+        <meshStandardMaterial color="#1f130c" roughness={0.75} />
+      </mesh>
+
+      {/* Faint warm interior reflection ghost — bottom-left bias */}
+      <mesh position={[-0.45, -0.2, 0.046]}>
+        <planeGeometry args={[1.0, 0.55]} />
+        <meshBasicMaterial color="#ffb070" toneMapped={false} transparent opacity={0.045} />
       </mesh>
 
       {/* Glass pane (almost clear, in front of city) */}
@@ -296,13 +408,213 @@ export function NightWindow() {
         <meshPhysicalMaterial
           color="#a4c0e8"
           transparent
-          opacity={0.08}
-          roughness={0}
+          opacity={0.06}
+          roughness={0.03}
           metalness={0}
-          transmission={0.8}
+          transmission={0.85}
           thickness={0.15}
           side={THREE.FrontSide}
         />
+      </mesh>
+
+      {/* String lights draped along the inside of the window frame */}
+      <StringLights />
+    </group>
+  )
+}
+
+/** Warm fairy lights swagged inside the top of the window — pure dorm vibe. */
+function StringLights() {
+  // Generate a sagging swag along the top + sides of the window opening.
+  const bulbs = useMemo(() => {
+    const pts: { x: number; y: number; phase: number }[] = []
+    const COUNT = 22
+    for (let i = 0; i < COUNT; i++) {
+      const t = i / (COUNT - 1)
+      // Three swags across the top: u maps to local angle in each swag.
+      const swag = Math.floor(t * 3)
+      const u = (t * 3) - swag
+      const xs = [-1.05, -0.36, 0.35, 1.05]
+      const x = xs[swag] + (xs[swag + 1] - xs[swag]) * u
+      // Sag downward proportional to sin(πu)
+      const y = 0.78 - Math.sin(u * Math.PI) * 0.12
+      pts.push({ x, y, phase: i * 0.74 })
+    }
+    return pts
+  }, [])
+  return (
+    <group>
+      {bulbs.map((b, i) => (
+        <FairyLight key={i} {...b} />
+      ))}
+      {/* Cord between bulbs — drawn IN FRONT of the glass plane (z=0.045) so
+          it reads as draped inside the room, not trapped between the panes. */}
+      {bulbs.slice(0, -1).map((b, i) => {
+        const next = bulbs[i + 1]
+        const dx = next.x - b.x
+        const dy = next.y - b.y
+        const len = Math.sqrt(dx * dx + dy * dy)
+        const angle = Math.atan2(dy, dx)
+        return (
+          <mesh
+            key={`c-${i}`}
+            position={[(b.x + next.x) / 2, (b.y + next.y) / 2, 0.07]}
+            rotation={[0, 0, angle]}
+          >
+            <planeGeometry args={[len, 0.006]} />
+            <meshBasicMaterial color="#2a241c" toneMapped={false} transparent opacity={0.9} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+function FairyLight({ x, y, phase }: { x: number; y: number; phase: number }) {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null)
+  useFrame((state) => {
+    if (!matRef.current) return
+    const t = state.clock.elapsedTime * 1.6 + phase
+    matRef.current.opacity = 0.85 + 0.15 * Math.sin(t)
+  })
+  return (
+    <group position={[x, y, 0.05]}>
+      {/* Outer halo */}
+      <mesh>
+        <circleGeometry args={[0.04, 16]} />
+        <meshBasicMaterial color="#ffd070" toneMapped={false} transparent opacity={0.32} />
+      </mesh>
+      {/* Bright core */}
+      <mesh position={[0, 0, 0.001]}>
+        <circleGeometry args={[0.018, 16]} />
+        <meshBasicMaterial ref={matRef} color="#fff0c0" toneMapped={false} transparent opacity={1} />
+      </mesh>
+    </group>
+  )
+}
+
+function BuildingSilhouette({
+  building,
+  layer,
+  index,
+}: {
+  building: Building
+  layer: SkylineLayer
+  index: number
+}) {
+  const lightRef = useRef<THREE.MeshBasicMaterial>(null)
+  // Each aviation light blinks on its own phase
+  const phase = useMemo(() => (index * 1.318) % (Math.PI * 2), [index])
+  useFrame((state) => {
+    if (!lightRef.current) return
+    const t = state.clock.elapsedTime * 1.6 + phase
+    // Sharp blink: ~10% on, 90% off
+    const v = Math.max(0, Math.sin(t)) ** 16
+    lightRef.current.opacity = v
+  })
+
+  const yCenter = layer.baseY + building.h / 2
+  return (
+    <group position={[building.x, yCenter, 0]}>
+      {/* Body */}
+      <mesh>
+        <planeGeometry args={[building.w, building.h]} />
+        <meshBasicMaterial color={layer.color} toneMapped={false} />
+      </mesh>
+      {/* Lit windows — small rectangles, slight per-window opacity variance */}
+      {building.windows.map(([wx, wy], i) => (
+        <mesh key={i} position={[wx, wy, 0.001]}>
+          <planeGeometry args={[0.014, 0.012]} />
+          <meshBasicMaterial
+            color={layer.windowColor}
+            toneMapped={false}
+            transparent
+            opacity={layer.windowOpacity * (0.55 + ((i * 37 + index) % 6) / 10)}
+          />
+        </mesh>
+      ))}
+      {building.antenna !== undefined && (
+        <>
+          <mesh position={[0, building.h / 2 + building.antenna / 2, 0.001]}>
+            <planeGeometry args={[0.004, building.antenna]} />
+            <meshBasicMaterial color={layer.color} toneMapped={false} />
+          </mesh>
+          {/* Aviation warning light — animated */}
+          <mesh position={[0, building.h / 2 + building.antenna, 0.002]}>
+            <circleGeometry args={[0.009, 12]} />
+            <meshBasicMaterial ref={lightRef} color="#ff3a3a" toneMapped={false} transparent opacity={0} />
+          </mesh>
+        </>
+      )}
+    </group>
+  )
+}
+
+function TwinkleStar({
+  x, y, r, phase, speed,
+}: { x: number; y: number; r: number; phase: number; speed: number }) {
+  const matRef = useRef<THREE.MeshBasicMaterial>(null)
+  useFrame((state) => {
+    if (!matRef.current) return
+    const t = state.clock.elapsedTime * speed + phase
+    matRef.current.opacity = 0.55 + 0.45 * Math.sin(t) ** 2
+  })
+  return (
+    <group position={[x, y, 0.0075]}>
+      <mesh>
+        <circleGeometry args={[r, 12]} />
+        <meshBasicMaterial ref={matRef} color="#fffaea" transparent opacity={0.8} toneMapped={false} />
+      </mesh>
+      {/* Cross-shaped diffraction spikes */}
+      <mesh>
+        <planeGeometry args={[r * 5, r * 0.35]} />
+        <meshBasicMaterial color="#fffaea" transparent opacity={0.18} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <planeGeometry args={[r * 0.35, r * 5]} />
+        <meshBasicMaterial color="#fffaea" transparent opacity={0.18} toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function Moon({ position }: { position: [number, number, number] }) {
+  const craters = useMemo(() => {
+    const rng = mulberry32(0x4321)
+    return Array.from({ length: 5 }, () => ({
+      x: (rng() - 0.5) * 0.13,
+      y: (rng() - 0.5) * 0.13,
+      r: 0.008 + rng() * 0.016,
+    }))
+  }, [])
+  return (
+    <group position={position}>
+      {/* Outer atmospheric halo */}
+      <mesh position={[0, 0, -0.001]}>
+        <circleGeometry args={[0.28, 48]} />
+        <meshBasicMaterial color="#fff5d6" transparent opacity={0.08} toneMapped={false} />
+      </mesh>
+      {/* Inner halo */}
+      <mesh>
+        <circleGeometry args={[0.16, 48]} />
+        <meshBasicMaterial color="#fff5d6" transparent opacity={0.22} toneMapped={false} />
+      </mesh>
+      {/* Disc */}
+      <mesh position={[0, 0, 0.001]}>
+        <circleGeometry args={[0.1, 48]} />
+        <meshBasicMaterial color="#fff5d6" toneMapped={false} />
+      </mesh>
+      {/* Subtle craters */}
+      {craters.map((c, i) => (
+        <mesh key={i} position={[c.x, c.y, 0.002]}>
+          <circleGeometry args={[c.r, 12]} />
+          <meshBasicMaterial color="#e6d8a8" transparent opacity={0.4} toneMapped={false} />
+        </mesh>
+      ))}
+      {/* Terminator shadow — slight crescent on the lower-right */}
+      <mesh position={[0.018, -0.012, 0.0025]}>
+        <circleGeometry args={[0.098, 48]} />
+        <meshBasicMaterial color="#1a1a3a" transparent opacity={0.18} toneMapped={false} />
       </mesh>
     </group>
   )

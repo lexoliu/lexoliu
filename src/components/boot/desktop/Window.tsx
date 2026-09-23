@@ -119,6 +119,7 @@ export function Win95Window({
       >
         <TitleBar
           title={title}
+          isMaximized={isMaximized}
           onMouseDown={handleMouseDown}
           onDoubleClick={handleMaximize}
           onMinimize={onMinimize}
@@ -144,6 +145,7 @@ export function Win95Window({
 
 interface TitleBarProps {
   title: string
+  isMaximized: boolean
   onMouseDown: (e: React.MouseEvent) => void
   onDoubleClick: () => void
   onMinimize: () => void
@@ -151,7 +153,7 @@ interface TitleBarProps {
   onClose: () => void
 }
 
-function TitleBar({ title, onMouseDown, onDoubleClick, onMinimize, onMaximize, onClose }: TitleBarProps) {
+function TitleBar({ title, isMaximized, onMouseDown, onDoubleClick, onMinimize, onMaximize, onClose }: TitleBarProps) {
   return (
     <div
       onMouseDown={onMouseDown}
@@ -178,13 +180,36 @@ function TitleBar({ title, onMouseDown, onDoubleClick, onMinimize, onMaximize, o
         <ChromeButton onClick={onMinimize} aria-label="Minimize">
           <div style={{ width: '6px', height: '2px', background: palette.black, marginTop: '8px' }} />
         </ChromeButton>
-        <ChromeButton onClick={onMaximize} aria-label="Maximize">
-          <div style={{ width: '9px', height: '9px', border: `1px solid ${palette.black}`, borderTop: `2px solid ${palette.black}` }} />
+        <ChromeButton onClick={onMaximize} aria-label={isMaximized ? 'Restore' : 'Maximize'}>
+          {isMaximized ? <RestoreGlyph /> : <MaximizeGlyph />}
         </ChromeButton>
         <ChromeButton onClick={onClose} aria-label="Close">
           <span style={{ fontFamily: 'Marlett, Arial', fontSize: '10px', fontWeight: 'bold', lineHeight: '14px' }}>✕</span>
         </ChromeButton>
       </div>
+    </div>
+  )
+}
+
+function MaximizeGlyph() {
+  return (
+    <div style={{ width: '9px', height: '9px', border: `1px solid ${palette.black}`, borderTop: `2px solid ${palette.black}` }} />
+  )
+}
+
+function RestoreGlyph() {
+  // Two overlapping rectangles (Win95 restore icon)
+  return (
+    <div style={{ position: 'relative', width: '10px', height: '10px' }}>
+      <div style={{
+        position: 'absolute', top: 0, right: 0, width: '7px', height: '7px',
+        border: `1px solid ${palette.black}`, borderTop: `2px solid ${palette.black}`,
+      }} />
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, width: '7px', height: '7px',
+        border: `1px solid ${palette.black}`, borderTop: `2px solid ${palette.black}`,
+        background: palette.buttonFace,
+      }} />
     </div>
   )
 }

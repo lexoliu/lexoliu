@@ -16,6 +16,8 @@ export function BootScreen({ phase, biosLines, bootLines, loadingProgress, scree
   if (!screenOn) return <PowerOffOverlay />
   if (phase === 'bios') return <BiosOutput shown={biosLines} />
   if (phase === 'boot' || phase === 'loading') return <BootOutput shown={bootLines} phase={phase} progress={loadingProgress} />
+  if (phase === 'shutting_down') return <ShuttingDownSplash />
+  if (phase === 'shutdown_safe') return <SafeToTurnOffSplash />
   return null
 }
 
@@ -90,6 +92,63 @@ function PowerOffOverlay() {
   return (
     <div style={{ color: '#5f5f5f', textAlign: 'center', marginTop: '45%', fontSize: '12px', fontFamily: fonts.mono }}>
       POWER OFF
+    </div>
+  )
+}
+
+/**
+ * Win95-style "Please wait while your computer shuts down." splash.
+ * Cyan-on-cloud-blue with a centered card.
+ */
+function ShuttingDownSplash() {
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      background: '#3a6ea5',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: fonts.win95,
+    }}>
+      <div style={{ color: '#fff', textAlign: 'center', fontSize: '14px', maxWidth: '70%' }}>
+        <div style={{ fontSize: '22px', marginBottom: '14px', letterSpacing: '0.5px' }}>
+          Lexo<span style={{ fontStyle: 'italic' }}>95</span>
+        </div>
+        <div>Please wait while your computer shuts down.</div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Win95-style "It's now safe to turn off your computer." orange screen.
+ * Click the CRT power button to restart.
+ */
+function SafeToTurnOffSplash() {
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      background: '#000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: fonts.win95,
+    }}>
+      <div style={{
+        color: '#ff9933',
+        textAlign: 'center',
+        fontSize: '18px',
+        letterSpacing: '0.5px',
+        textShadow: '0 0 6px rgba(255,153,51,0.55)',
+        maxWidth: '70%',
+        lineHeight: '1.5',
+      }}>
+        It&apos;s now safe to turn off
+        <br />
+        your computer.
+      </div>
     </div>
   )
 }

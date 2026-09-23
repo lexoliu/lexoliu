@@ -11,6 +11,10 @@ interface BootPhaseState {
   bootLines: number
   loadingProgress: number
   skipToDesktop: () => void
+  /** Begin Win95-style shutdown sequence: shutting_down → shutdown_safe. */
+  requestShutdown: () => void
+  /** Restart from the very beginning (used by power button when off). */
+  restart: () => void
 }
 
 /**
@@ -74,6 +78,13 @@ export function useBootPhase({ onComplete }: BootPhaseOptions = {}): BootPhaseSt
     return () => window.clearTimeout(id)
   }, [phase, onComplete])
 
+  // shutting_down → shutdown_safe after ~1.6s
+  useEffect(() => {
+    if (phase !== 'shutting_down') return
+    const id = window.setTimeout(() => setPhase('shutdown_safe'), 1600)
+    return () => window.clearTimeout(id)
+  }, [phase])
+
   return {
     phase,
     biosLines,
@@ -84,6 +95,13 @@ export function useBootPhase({ onComplete }: BootPhaseOptions = {}): BootPhaseSt
       setBootLines(BOOT_LINES.length)
       setLoadingProgress(100)
       setPhase('desktop')
+    },
+    requestShutdown: () => setPhase('shutting_down'),
+    restart: () => {
+      setBiosLines(0)
+      setBootLines(0)
+      setLoadingProgress(0)
+      setPhase('startup')
     },
   }
 }
