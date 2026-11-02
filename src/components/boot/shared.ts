@@ -1,6 +1,15 @@
 import type { CSSProperties } from 'react'
 
-export type Phase = 'startup' | 'bios' | 'boot' | 'loading' | 'desktop'
+export type Phase =
+  | 'startup'
+  | 'bios'
+  | 'boot'
+  | 'loading'
+  | 'desktop'
+  /** Shutdown initiated (Win95 "Please wait while your computer shuts down" splash). */
+  | 'shutting_down'
+  /** Shutdown complete (Win95 "It is now safe to turn off your computer" splash). */
+  | 'shutdown_safe'
 export type PanelId = 'about' | 'github' | 'travel' | 'waterui'
 export type IconKind = 'folder' | 'terminal' | 'map' | 'droplet' | 'speaker'
 

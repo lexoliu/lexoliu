@@ -14,6 +14,7 @@ interface DesktopProps {
   onOpenPanel: (panel: PanelId) => void
   onClosePanel: (panel: PanelId) => void
   onFocusPanel: (panel: PanelId) => void
+  onShutdown: () => void
 }
 
 const PANEL_CONTENT: Record<PanelId, () => React.ReactNode> = {
@@ -28,7 +29,7 @@ const PANEL_CONTENT: Record<PanelId, () => React.ReactNode> = {
  * windows, context menus and dialogs. Lives entirely inside the CRT's HTML
  * overlay.
  */
-export function Desktop({ icons, openPanels, onOpenPanel, onClosePanel, onFocusPanel }: DesktopProps) {
+export function Desktop({ icons, openPanels, onOpenPanel, onClosePanel, onFocusPanel, onShutdown }: DesktopProps) {
   const [selectedIcon, setSelectedIcon] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; iconId?: string } | null>(null)
   const [minimized, setMinimized] = useState<PanelId[]>([])
@@ -87,7 +88,6 @@ export function Desktop({ icons, openPanels, onOpenPanel, onClosePanel, onFocusP
         width: '100%',
         height: '100%',
         background: palette.desktopTeal,
-        margin: '-24px',
         padding: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -140,6 +140,7 @@ export function Desktop({ icons, openPanels, onOpenPanel, onClosePanel, onFocusP
               onClose={() => setStartOpen(false)}
               onOpenPanel={onOpenPanel}
               onShowDialog={setDialog}
+              onShutdown={onShutdown}
             />
           ) : null
         }

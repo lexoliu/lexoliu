@@ -8,6 +8,7 @@ interface StartMenuProps {
   onClose: () => void
   onOpenPanel: (panel: PanelId) => void
   onShowDialog: (dialog: DialogState) => void
+  onShutdown: () => void
 }
 
 interface MenuRow {
@@ -26,7 +27,7 @@ const PROGRAMS_LABELS: Record<PanelId, string> = {
   waterui: 'WaterUI',
 }
 
-export function StartMenu({ onClose, onOpenPanel, onShowDialog }: StartMenuProps) {
+export function StartMenu({ onClose, onOpenPanel, onShowDialog, onShutdown }: StartMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   useClickOutside(ref, onClose)
 
@@ -38,7 +39,7 @@ export function StartMenu({ onClose, onOpenPanel, onShowDialog }: StartMenuProps
       message: 'Are you sure you want to shut down?',
       type: 'question',
       showCancel: true,
-      onOk: () => window.location.reload(),
+      onOk: onShutdown,
       onCancel: () => {},
     })
     onClose()

@@ -14,7 +14,9 @@ function HomePage() {
   const [scrollProgress, setScrollProgress] = useState(0)
   // Multiple open panels with z-index ordering (last in array = topmost)
   const [openPanels, setOpenPanels] = useState<PanelId[]>([])
-  const [lampOn, setLampOn] = useState(true)
+  // Desk lamp and ceiling pendant are independently controllable.
+  const [deskLampOn, setDeskLampOn] = useState(true)
+  const [ceilingLampOn, setCeilingLampOn] = useState(true)
 
   // Audio hook - no audio file for now (can be added later)
   const { toggle: toggleMusic } = useAudio()
@@ -64,8 +66,11 @@ function HomePage() {
     })
   }, [])
 
-  const toggleLamp = useCallback(() => {
-    setLampOn((prev) => !prev)
+  const toggleDeskLamp = useCallback(() => {
+    setDeskLampOn((prev) => !prev)
+  }, [])
+  const toggleCeilingLamp = useCallback(() => {
+    setCeilingLampOn((prev) => !prev)
   }, [])
 
   return (
@@ -77,9 +82,11 @@ function HomePage() {
         onOpenPanel={openPanel}
         onClosePanel={closePanel}
         onFocusPanel={focusPanel}
-        onToggleLamp={toggleLamp}
+        onToggleDeskLamp={toggleDeskLamp}
+        onToggleCeilingLamp={toggleCeilingLamp}
         onToggleMusic={toggleMusic}
-        lampOn={lampOn}
+        deskLampOn={deskLampOn}
+        ceilingLampOn={ceilingLampOn}
         openPanels={openPanels}
       />
 

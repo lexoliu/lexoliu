@@ -16,6 +16,7 @@ interface CRTMonitorProps {
   onClosePanel: (panel: PanelId) => void
   onFocusPanel: (panel: PanelId) => void
   onTogglePower: () => void
+  onShutdown: () => void
 }
 
 const SCREEN_KEYFRAMES = `@keyframes lexoBlink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }`
@@ -37,9 +38,10 @@ export function CRTMonitor({
   onClosePanel,
   onFocusPanel,
   onTogglePower,
+  onShutdown,
 }: CRTMonitorProps) {
   return (
-    <group scale={0.82} position={[0, -0.18, -0.05]}>
+    <group scale={0.66} position={[0, -0.776, -0.4]}>
       <MonitorShell />
       <ScreenSurface
         screenOn={screenOn}
@@ -52,6 +54,7 @@ export function CRTMonitor({
         onOpenPanel={onOpenPanel}
         onClosePanel={onClosePanel}
         onFocusPanel={onFocusPanel}
+        onShutdown={onShutdown}
       />
       <ControlPanel screenOn={screenOn} onTogglePower={onTogglePower} />
     </group>
@@ -106,9 +109,12 @@ function MonitorShell() {
         </mesh>
       ))}
 
-      {/* Stand */}
-      <mesh position={[0, -1.9, 0.15]}>
-        <boxGeometry args={[3.6, 0.28, 1.8]} />
+      {/* Stand — top meets body bottom (body bottom local y = -0.05 - 1.6 = -1.65,
+          so stand top = -1.65, stand center y = -1.79). Z must match body
+          (body center z=-0.55, depth 2.4) so the stand doesn't poke out past
+          the front bezel and crash into the keyboard on the desk. */}
+      <mesh position={[0, -1.79, -0.55]}>
+        <boxGeometry args={[3.6, 0.28, 2.4]} />
         <meshStandardMaterial color="#b8b3a8" roughness={0.8} />
       </mesh>
     </>
@@ -126,6 +132,7 @@ interface ScreenSurfaceProps {
   onOpenPanel: (panel: PanelId) => void
   onClosePanel: (panel: PanelId) => void
   onFocusPanel: (panel: PanelId) => void
+  onShutdown: () => void
 }
 
 function ScreenSurface({
@@ -139,6 +146,7 @@ function ScreenSurface({
   onOpenPanel,
   onClosePanel,
   onFocusPanel,
+  onShutdown,
 }: ScreenSurfaceProps) {
   return (
     <>
@@ -158,27 +166,34 @@ function ScreenSurface({
           height: '500px',
           background: screenOn ? palette.screenOn : palette.screenOff,
           overflow: 'hidden',
-        }}
-      >
-        <div style={{
-          width: '100%',
-          height: '100%',
-          padding: '20px',
+          position: 'relative',
           fontFamily: fonts.mono,
           fontSize: '13px',
           lineHeight: '1.35',
-          position: 'relative',
-          boxSizing: 'border-box',
-        }}>
-          {phase === 'desktop' && screenOn ? (
-            <Desktop
-              icons={icons}
-              openPanels={openPanels}
-              onOpenPanel={onOpenPanel}
-              onClosePanel={onClosePanel}
-              onFocusPanel={onFocusPanel}
-            />
-          ) : (
+        }}
+      >
+        {phase === 'desktop' && screenOn ? (
+          /* Desktop fills the full screen (680x500). Windows can now maximize
+             to the entire screen area (minus the taskbar) without negative-
+             margin hacks. */
+          <Desktop
+            icons={icons}
+            openPanels={openPanels}
+            onOpenPanel={onOpenPanel}
+            onClosePanel={onClosePanel}
+            onFocusPanel={onFocusPanel}
+            onShutdown={onShutdown}
+          />
+        ) : (
+          /* Boot/BIOS/loading content gets a CRT-safe inner padding so text
+             doesn't run all the way to the bezel. */
+          <div style={{
+            width: '100%',
+            height: '100%',
+            padding: '20px',
+            position: 'relative',
+            boxSizing: 'border-box',
+          }}>
             <BootScreen
               phase={phase}
               biosLines={biosLines}
@@ -186,10 +201,10 @@ function ScreenSurface({
               loadingProgress={loadingProgress}
               screenOn={screenOn}
             />
-          )}
-          <CrtFx />
-          <style>{SCREEN_KEYFRAMES}</style>
-        </div>
+          </div>
+        )}
+        <CrtFx />
+        <style>{SCREEN_KEYFRAMES}</style>
       </Html>
     </>
   )

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCursor } from '@react-three/drei'
+import * as THREE from 'three'
 
 interface CeilingLightProps {
   on: boolean
@@ -34,6 +35,29 @@ export function CeilingLight({ on, onToggle }: CeilingLightProps) {
       <mesh position={[0, -0.12, 0]}>
         <cylinderGeometry args={[0.035, 0.04, 0.1, 12]} />
         <meshStandardMaterial color="#8b7355" roughness={0.3} metalness={0.7} />
+      </mesh>
+
+      {/* Industrial enamel shade — outer black metal */}
+      <mesh position={[0, -0.16, 0]} castShadow>
+        <coneGeometry args={[0.18, 0.22, 32, 1, true]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.45} metalness={0.7} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Shade inner liner — warm white reflective so the bulb glow scatters back down */}
+      <mesh position={[0, -0.16, 0]}>
+        <coneGeometry args={[0.172, 0.215, 32, 1, true]} />
+        <meshStandardMaterial
+          color={on ? '#fff1d6' : '#d8cfb8'}
+          roughness={0.55}
+          metalness={0.05}
+          emissive={on ? '#ffb060' : '#000'}
+          emissiveIntensity={on ? 0.7 : 0}
+          side={THREE.BackSide}
+        />
+      </mesh>
+      {/* Rim ring */}
+      <mesh position={[0, -0.27, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <torusGeometry args={[0.18, 0.006, 8, 36]} />
+        <meshStandardMaterial color="#0d0d0d" roughness={0.4} metalness={0.85} />
       </mesh>
 
       {/* Bulb */}

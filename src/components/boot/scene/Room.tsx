@@ -7,15 +7,20 @@ import { MeshReflectorMaterial } from '@react-three/drei'
  * "real" instead of "flat".
  */
 const FLOOR_PLANK_COLUMNS = [-6, -3, 0, 3, 6] as const
-const DESK_LEGS: ReadonlyArray<readonly [number, number, number]> = [
-  [-2.3, -2.5, -1.55],
-  [2.3, -2.5, -1.55],
-  [-2.3, -2.5, 0.45],
-  [2.3, -2.5, 0.45],
-]
-
 const FLOOR_LEVEL = -2.5
 const DESK_TOP = -2.05
+// Legs span exactly floor → desk underside (height = DESK_TOP - 0.05 - FLOOR_LEVEL = 0.4)
+const LEG_HEIGHT = 0.4
+const LEG_Y = (FLOOR_LEVEL + DESK_TOP - 0.05) / 2 // -2.3
+const DESK_WIDTH = 7.6
+const DESK_DEPTH = 2.4
+const LEG_INSET = 0.2
+const DESK_LEGS: ReadonlyArray<readonly [number, number, number]> = [
+  [-(DESK_WIDTH / 2 - LEG_INSET), LEG_Y, -1.55],
+  [DESK_WIDTH / 2 - LEG_INSET, LEG_Y, -1.55],
+  [-(DESK_WIDTH / 2 - LEG_INSET), LEG_Y, 0.55],
+  [DESK_WIDTH / 2 - LEG_INSET, LEG_Y, 0.55],
+]
 
 export function Room() {
   return (
@@ -23,7 +28,40 @@ export function Room() {
       <Floor />
       <Walls />
       <Desk />
+      <Rug />
     </>
+  )
+}
+
+function Rug() {
+  // Layered: wide soft rug underneath, smaller patterned top adds texture.
+  const RUG_W = 5.4
+  const RUG_D = 3.2
+  return (
+    <group position={[0, FLOOR_LEVEL + 0.005, 0.6]}>
+      {/* Base — burgundy plush */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[RUG_W, RUG_D]} />
+        <meshStandardMaterial color="#5a2a2a" roughness={0.95} />
+      </mesh>
+      {/* Cream border ring drawn just above the base to suggest a pattern */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0]}>
+        <ringGeometry args={[Math.min(RUG_W, RUG_D) * 0.42, Math.min(RUG_W, RUG_D) * 0.46, 4, 1]} />
+        <meshStandardMaterial color="#d8c8a4" roughness={0.9} side={2} />
+      </mesh>
+      {/* Inner medallion */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
+        <circleGeometry args={[0.5, 6]} />
+        <meshStandardMaterial color="#3a1818" roughness={0.95} />
+      </mesh>
+      {/* Tassels along front edge */}
+      {[-2.2, -1.5, -0.8, 0, 0.8, 1.5, 2.2].map((x) => (
+        <mesh key={x} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.001, RUG_D / 2 + 0.07]}>
+          <planeGeometry args={[0.05, 0.14]} />
+          <meshStandardMaterial color="#d8c8a4" roughness={0.95} />
+        </mesh>
+      ))}
+    </group>
   )
 }
 
@@ -32,7 +70,7 @@ function Floor() {
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_LEVEL, 0]} receiveShadow>
         <planeGeometry args={[25, 20]} />
-        <meshStandardMaterial color="#3d2c22" roughness={0.82} metalness={0.02} />
+        <meshStandardMaterial color="#1f1812" roughness={0.85} metalness={0.02} />
       </mesh>
       {FLOOR_PLANK_COLUMNS.map((x) => (
         <mesh key={x} position={[x, FLOOR_LEVEL + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -77,7 +115,7 @@ function Desk() {
     <>
       {/* Desk core (matte underside + front face) */}
       <mesh position={[0, DESK_TOP - 0.025, -0.5]} receiveShadow castShadow>
-        <boxGeometry args={[5.2, 0.05, 2.4]} />
+        <boxGeometry args={[DESK_WIDTH, 0.05, DESK_DEPTH]} />
         <meshStandardMaterial color="#3a2618" roughness={0.85} />
       </mesh>
       {/* Reflective top (subtle, low-res for performance) */}
@@ -86,7 +124,7 @@ function Desk() {
         position={[0, DESK_TOP + 0.001, -0.5]}
         receiveShadow
       >
-        <planeGeometry args={[5.2, 2.4]} />
+        <planeGeometry args={[DESK_WIDTH, DESK_DEPTH]} />
         <MeshReflectorMaterial
           color="#4a3124"
           roughness={0.78}
@@ -103,13 +141,13 @@ function Desk() {
       </mesh>
       {/* Front edge trim */}
       <mesh position={[0, DESK_TOP, 0.69]}>
-        <boxGeometry args={[5.2, 0.08, 0.08]} />
+        <boxGeometry args={[DESK_WIDTH, 0.08, 0.08]} />
         <meshStandardMaterial color="#5a3b2b" roughness={0.62} />
       </mesh>
       {DESK_LEGS.map((pos, i) => (
         <mesh key={i} position={pos as [number, number, number]} castShadow>
-          <boxGeometry args={[0.1, 0.9, 0.1]} />
-          <meshStandardMaterial color="#3f2b20" roughness={0.74} />
+          <boxGeometry args={[0.12, LEG_HEIGHT, 0.12]} />
+          <meshStandardMaterial color="#2f1f15" roughness={0.74} />
         </mesh>
       ))}
     </>

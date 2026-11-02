@@ -2,10 +2,13 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useRef } from 'react'
 
-const ROOM_POSITION = new THREE.Vector3(3.6, 1.25, 9.4)
-const ROOM_LOOKAT = new THREE.Vector3(-0.2, -1.0, -0.5)
-const SCREEN_LOOKAT = new THREE.Vector3(0, 0, 0)
-const SCREEN_BASE_Z = 5.5
+const ROOM_POSITION = new THREE.Vector3(2.7, 0.65, 6.8)
+const ROOM_LOOKAT = new THREE.Vector3(-0.15, -0.55, -0.4)
+// Screen world position (after CRTMonitor's group scale=0.66 + group y=-0.776):
+//   screen y = -0.776 + 0.12*0.66 ≈ -0.70
+//   screen z = -0.4 + 1.025*0.66 ≈ 0.28
+const SCREEN_LOOKAT = new THREE.Vector3(0, -0.7, 0.28)
+const SCREEN_BASE_Z = 4.05
 
 /**
  * Smoothly lerps the camera between the cozy room view and the close-up CRT

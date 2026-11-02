@@ -9,13 +9,20 @@ import * as THREE from 'three'
  * window light from one side, soft ground bounce) without fetching any
  * external HDR. Runs once into a tiny cubemap (`frames={1}`).
  */
-export function SceneEnvironment({ lampOn }: { lampOn: boolean }) {
+export function SceneEnvironment({
+  deskLampOn,
+  ceilingLampOn,
+}: {
+  deskLampOn: boolean
+  ceilingLampOn: boolean
+}) {
+  const anyOn = deskLampOn || ceilingLampOn
   return (
-    <Environment frames={1} resolution={64} background={false} environmentIntensity={lampOn ? 0.85 : 0.5}>
-      {/* Warm overhead — pendant glow */}
+    <Environment frames={1} resolution={64} background={false} environmentIntensity={anyOn ? 0.85 : 0.5}>
+      {/* Warm overhead — pendant glow. Only present when ceiling is on. */}
       <Lightformer
         form="rect"
-        intensity={lampOn ? 4.0 : 0.6}
+        intensity={ceilingLampOn ? 4.0 : (deskLampOn ? 0.9 : 0.4)}
         position={[0, 4, 0]}
         scale={[6, 1, 6]}
         color="#ffe2b6"
@@ -24,10 +31,19 @@ export function SceneEnvironment({ lampOn }: { lampOn: boolean }) {
       {/* Cool window side — moonlight */}
       <Lightformer
         form="rect"
-        intensity={lampOn ? 1.1 : 2.4}
+        intensity={anyOn ? 1.1 : 2.6}
         position={[5, 1.5, 0]}
         scale={[1, 3, 4]}
-        color="#7a99c8"
+        color="#8aa5d0"
+        rotation={[0, -Math.PI / 2, 0]}
+      />
+      {/* Warm city glow leaking from below the window */}
+      <Lightformer
+        form="rect"
+        intensity={anyOn ? 0.4 : 0.9}
+        position={[4.5, -0.4, -1]}
+        scale={[2.5, 0.6, 1]}
+        color="#a26a48"
         rotation={[0, -Math.PI / 2, 0]}
       />
       {/* Subtle ground bounce */}
@@ -42,10 +58,10 @@ export function SceneEnvironment({ lampOn }: { lampOn: boolean }) {
       {/* Behind-camera fill — keeps near faces from going pitch black */}
       <Lightformer
         form="rect"
-        intensity={lampOn ? 0.6 : 0.9}
+        intensity={anyOn ? 0.6 : 0.9}
         position={[0, 0, 8]}
         scale={[6, 4, 1]}
-        color={lampOn ? '#f3d7b0' : '#637996'}
+        color={anyOn ? '#f3d7b0' : '#637996'}
       />
     </Environment>
   )
@@ -73,7 +89,7 @@ export function PostProcessing() {
         modulationOffset={0.4}
         blendFunction={BlendFunction.NORMAL}
       />
-      <Vignette eskil={false} offset={0.2} darkness={0.85} />
+      <Vignette eskil={false} offset={0.35} darkness={0.55} />
     </EffectComposer>
   )
 }

@@ -10,7 +10,7 @@ const LEAVES: ReadonlyArray<{ rx: number; ry: number; rz: number; y: number }> =
 /** A small monstera-style plant in a terracotta pot on the desk. */
 export function Plant() {
   return (
-    <group position={[2.3, -1.98, 0.3]}>
+    <group position={[-3.0, -1.945, 0.45]} scale={1.05}>
       {/* Pot */}
       <mesh castShadow>
         <cylinderGeometry args={[0.15, 0.12, 0.2, 16]} />

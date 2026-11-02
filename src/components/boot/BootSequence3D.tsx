@@ -11,9 +11,11 @@ interface BootSequence3DProps {
   onOpenPanel?: (panel: PanelId) => void
   onClosePanel?: (panel: PanelId) => void
   onFocusPanel?: (panel: PanelId) => void
-  onToggleLamp?: () => void
+  onToggleDeskLamp?: () => void
+  onToggleCeilingLamp?: () => void
   onToggleMusic?: () => void
-  lampOn?: boolean
+  deskLampOn?: boolean
+  ceilingLampOn?: boolean
   openPanels?: PanelId[]
 }
 
@@ -28,13 +30,27 @@ export function BootSequence3D({
   onOpenPanel,
   onClosePanel,
   onFocusPanel,
-  onToggleLamp,
+  onToggleDeskLamp,
+  onToggleCeilingLamp,
   onToggleMusic,
-  lampOn = true,
+  deskLampOn = true,
+  ceilingLampOn = true,
   openPanels = [],
 }: BootSequence3DProps) {
   const [computerOn, setComputerOn] = useState(true)
-  const { phase, biosLines, bootLines, loadingProgress, skipToDesktop } = useBootPhase({ onComplete })
+  const { phase, biosLines, bootLines, loadingProgress, skipToDesktop, requestShutdown, restart } =
+    useBootPhase({ onComplete })
+
+  // Power button: from "shutdown_safe" → restart boot. From any live state →
+  // toggle the screen physically off (the BootScreen renders POWER OFF).
+  const handlePowerButton = () => {
+    if (phase === 'shutdown_safe') {
+      restart()
+      setComputerOn(true)
+      return
+    }
+    setComputerOn((p) => !p)
+  }
 
   const icons = useMemo<DesktopIcon[]>(() => [
     { id: 'about', name: 'ABOUT.exe', icon: 'folder', action: () => onOpenPanel?.('about') },
@@ -63,11 +79,14 @@ export function BootSequence3D({
             loadingProgress={loadingProgress}
             scrollProgress={scrollProgress}
             icons={icons}
-            lampOn={lampOn}
+            deskLampOn={deskLampOn}
+            ceilingLampOn={ceilingLampOn}
             computerOn={computerOn}
             openPanels={openPanels}
-            onToggleLamp={() => onToggleLamp?.()}
-            onTogglePower={() => setComputerOn((p) => !p)}
+            onToggleDeskLamp={() => onToggleDeskLamp?.()}
+            onToggleCeilingLamp={() => onToggleCeilingLamp?.()}
+            onShutdown={requestShutdown}
+            onTogglePower={handlePowerButton}
             onOpenPanel={handlePanel(onOpenPanel)}
             onClosePanel={handlePanel(onClosePanel)}
             onFocusPanel={handlePanel(onFocusPanel)}
