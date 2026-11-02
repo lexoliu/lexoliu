@@ -664,6 +664,9 @@ ${bodyContent}
       },
       disable_mouse: true,
       network_relay_url: "fetch",
+      // The guest's NE2000 driver keeps the MAC from the saved state; without this,
+      // v86 randomises the card's MAC on load and drops every frame sent to the guest.
+      preserve_mac_from_state_image: true,
       autostart: true,
     });
 
