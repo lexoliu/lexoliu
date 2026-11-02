@@ -19,14 +19,24 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Restore VM disk chunks
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install mtools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools
+
+      - name: Restore VM inputs
         uses: actions/cache@v4
         with:
-          path: public/vm/hda
-          key: vm-hda-${{ hashFiles('tools/vm/hda.sha256') }}
+          path: |
+            ~/.cache/lexoliu-vm/sources
+            ~/.cache/lexoliu-vm/hda
+          key: vm-inputs-${{ hashFiles('tools/vm/sources.json', 'tools/vm/hda.sha256') }}
 
-      - name: Fetch VM disk chunks
-        run: bun tools/vm/fetch-hda.ts
+      - name: Build VM assets
+        run: bun tools/vm/build.ts
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
