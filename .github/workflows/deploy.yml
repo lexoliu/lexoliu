@@ -16,6 +16,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Restore VM disk chunks
+        uses: actions/cache@v4
+        with:
+          path: public/vm/hda
+          key: vm-hda-${{ hashFiles('tools/vm/hda.sha256') }}
+
+      - name: Fetch VM disk chunks
+        run: bun tools/vm/fetch-hda.ts
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

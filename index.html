@@ -570,22 +570,17 @@ ${bodyContent}
       );
     }
 
-    // Intercept global fetch for both hda chunk fallback and guest Netscape HTTP traffic
+    // Intercept global fetch for guest Netscape HTTP traffic
     const origFetch = window.fetch.bind(window);
     window.fetch = async function(input, init) {
       const rawUrl = typeof input === "string" ? input : (input && input.url) || String(input);
 
-      // 1. Local VM assets & on-demand disk chunks (with remote fallback if any rare chunk wasn't cached)
+      // 1. Local VM assets are served same-origin
       if (
         rawUrl.startsWith("/public/vm/") ||
         rawUrl.startsWith(window.location.origin + "/public/vm/")
       ) {
-        const res = await origFetch(input, init);
-        if (!res.ok && rawUrl.includes("/public/vm/hda/")) {
-          const chunkFile = rawUrl.split("/public/vm/hda/")[1];
-          return origFetch(`https://i.copy.sh/windows95-v3/${chunkFile}`, init);
-        }
-        return res;
+        return origFetch(input, init);
       }
 
       // 2. Guest OS HTTP requests coming from Netscape Navigator 3.0 via FetchNetworkAdapter
