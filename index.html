@@ -304,7 +304,7 @@
           <div>Display Adapter : <span class="hi">VBE SVGA 1024x768x32bpp (8192K VRAM)</span></div>
           <div>Pointer Device : <span class="ok">VBMOUSE Seamless Absolute Coordinate Driver [1:1 Mode]</span></div>
           <div>Primary Master : <span class="hi">471MB Windows 95 OSR2 (256KB On-Demand Chunked Disk)</span></div>
-          <div>Primary Slave : <span class="hi">8MB FAT16 Volume [D:\NETSCAPE\NETSCAPE.EXE v3.0]</span></div>
+          <div>Primary Slave : <span class="hi">8MB FAT12 Volume [D:\NETSCAPE\NETSCAPE.EXE v3.0]</span></div>
           <div>Network Adapter : <span class="ok">NE2000 Compatible (IRQ 10, I/O 0x300) -&gt; Host Fetch Relay</span></div>
           <br />
           <div id="bios-step-line">Restoring hibernated VM state (<span class="hi">win95-netscape.state.bin.zst</span>)...</div>
@@ -650,12 +650,12 @@ ${bodyContent}
         use_parts: true,
       },
       hdb: {
-        url: "/public/vm/hdb.img?v=3",
+        url: "/public/vm/hdb.img?v=4",
         size: 8257536,
         async: false,
       },
       initial_state: {
-        url: "/public/vm/win95-netscape.state.bin.zst?v=3",
+        url: "/public/vm/win95-netscape.state.bin.zst?v=4",
       },
       disable_mouse: true,
       network_relay_url: "fetch",

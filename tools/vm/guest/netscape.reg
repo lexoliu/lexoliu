@@ -1,0 +1,50 @@
+REGEDIT4
+
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\TimeZoneInformation]
+"DisableAutoDaylightTimeSet"=dword:00000001
+
+[HKEY_CURRENT_CONFIG\Display\Settings]
+"Resolution"="1440,900"
+"BitsPerPixel"="16"
+
+[HKEY_LOCAL_MACHINE\Config\0001\Display\Settings]
+"Resolution"="1440,900"
+"BitsPerPixel"="16"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run]
+"Netscape"="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
+"ResChg"="D:\\RESCHG.EXE"
+
+[HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Main]
+"Mozilla"="Good-3.0"
+"Ignore DefCheck"="yes"
+"Install Directory"="D:\\NETSCAPE"
+"Home Page"="http://lexo.cool/"
+"Autoload Home Page"="yes"
+"Initial Home Page"="no"
+
+[HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Main Window]
+"Left"=dword:00000060
+"Top"=dword:00000014
+"Right"=dword:00000578
+"Bottom"=dword:00000350
+"Show"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Bookmark List]
+"File Location"="D:\\NETSCAPE\\BOOKMARK.HTM"
+
+[HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Cache]
+"Cache Dir"="D:\\NETSCAPE\\CACHE"
+
+[HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Settings]
+"Custom Background"="custom"
+"Background Color"="192, 192, 192"
+
+[HKEY_CLASSES_ROOT\CLSID\{FBF23B42-E3F0-101B-8488-00AA003E56F8}]
+@="Netscape Navigator"
+
+[HKEY_CLASSES_ROOT\CLSID\{FBF23B42-E3F0-101B-8488-00AA003E56F8}\DefaultIcon]
+@="D:\\NETSCAPE\\NETSCAPE.EXE,0"
+
+[HKEY_CLASSES_ROOT\CLSID\{FBF23B42-E3F0-101B-8488-00AA003E56F8}\Shell\Open\Command]
+@="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
