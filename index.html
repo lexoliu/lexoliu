@@ -1,54 +1,933 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;700&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)</title>
+  <style>
+    :root {
+      --win-gray: #c0c0c0;
+      --win-dark: #808080;
+      --win-darker: #404040;
+      --win-light: #ffffff;
+      --win-navy: #000080;
+      --win-teal: #008080;
+    }
 
-        body {
-            padding: 7vw;
-            font-family: 'Martian Mono', monospace;
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        div {
-            margin-bottom: 50px;
-        }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050505;
+      color: #e0e0e0;
+      font-family: "MS Sans Serif", "Tahoma", "Geneva", sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-        .heading {
-            font-size: 40px;
-            font-weight: bold;
-        }
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #008080;
+    }
 
-        p {
-            margin-bottom: 10px;
-        }
+    /* Full-Viewport Responsive Monitor Container */
+    #monitor-frame {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #008080;
+      overflow: hidden;
+    }
 
-        a:link {
-            color: black;
-            text-decoration: underline;
-        }
+    /* v86 screen_container */
+    #screen_container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background: #000;
+    }
 
-        a:active {
-            color: black;
-        }
+    #screen_container > div {
+      white-space: pre;
+      font: 14px monospace;
+      line-height: 14px;
+    }
 
-        a:visited {
-            color: black;
-        }
-    </style>
+    #screen_container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      cursor: none;
+    }
+
+    /* Retro BIOS / Snapshot Loading Screen */
+    #boot-splash {
+      position: absolute;
+      inset: 0;
+      z-index: 25;
+      background: #000000;
+      color: #c0c0c0;
+      font-family: "Courier New", Courier, monospace;
+      padding: 28px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: opacity 0.35s ease;
+    }
+
+    #boot-splash.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .bios-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid #333;
+      padding-bottom: 14px;
+    }
+
+    .bios-title {
+      font-size: 15px;
+      line-height: 1.45;
+      color: #d8d8d8;
+    }
+
+    .bios-title strong {
+      color: #ffffff;
+    }
+
+    .energy-badge {
+      border: 1px solid #808000;
+      padding: 6px 10px;
+      color: #ffff55;
+      font-size: 12px;
+      text-align: right;
+      line-height: 1.3;
+    }
+
+    .bios-log {
+      font-size: 14px;
+      line-height: 1.65;
+      color: #b8b8b8;
+      margin: 18px 0;
+      flex: 1;
+    }
+
+    .bios-log .ok {
+      color: #55ff55;
+    }
+
+    .bios-log .hi {
+      color: #ffffff;
+    }
+
+    .win95-loader-box {
+      background: var(--win-gray);
+      color: #000;
+      border-top: 2px solid var(--win-light);
+      border-left: 2px solid var(--win-light);
+      border-right: 2px solid var(--win-darker);
+      border-bottom: 2px solid var(--win-darker);
+      padding: 3px;
+      max-width: 520px;
+      width: 100%;
+      margin: 0 auto 24px auto;
+      font-family: "MS Sans Serif", "Tahoma", sans-serif;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.65);
+    }
+
+    .win95-titlebar {
+      background: linear-gradient(90deg, #000080, #1084d0);
+      color: #fff;
+      font-weight: bold;
+      font-size: 12px;
+      padding: 3px 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .win95-body {
+      padding: 14px 16px;
+      font-size: 12px;
+    }
+
+    .win95-status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .win95-progress-well {
+      height: 20px;
+      background: #fff;
+      border-top: 2px solid var(--win-dark);
+      border-left: 2px solid var(--win-dark);
+      border-right: 2px solid var(--win-light);
+      border-bottom: 2px solid var(--win-light);
+      padding: 2px;
+      display: flex;
+      gap: 2px;
+    }
+
+    .win95-progress-fill {
+      height: 100%;
+      width: 8%;
+      background: repeating-linear-gradient(
+        90deg,
+        var(--win-navy) 0px,
+        var(--win-navy) 10px,
+        #fff 10px,
+        #fff 12px
+      );
+      transition: width 0.12s linear;
+    }
+
+    .bios-footer {
+      font-size: 12px;
+      color: #777;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Host Notification Popup (Win95 Dialog for External Links) */
+    #ext-link-toast {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 30;
+      width: 340px;
+      background: var(--win-gray);
+      color: #000;
+      border-top: 2px solid var(--win-light);
+      border-left: 2px solid var(--win-light);
+      border-right: 2px solid var(--win-darker);
+      border-bottom: 2px solid var(--win-darker);
+      padding: 3px;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.7);
+      display: none;
+    }
+
+    #ext-link-toast.visible {
+      display: block;
+    }
+
+    .toast-body {
+      padding: 10px 12px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .toast-url {
+      margin: 6px 0 10px 0;
+      padding: 4px 6px;
+      background: #fff;
+      border: 1px inset #808080;
+      font-family: monospace;
+      font-size: 11px;
+      word-break: break-all;
+      color: #000080;
+    }
+
+    .toast-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .win95-btn {
+      background: var(--win-gray);
+      color: #000;
+      border-top: 1px solid var(--win-light);
+      border-left: 1px solid var(--win-light);
+      border-right: 1px solid var(--win-darker);
+      border-bottom: 1px solid var(--win-darker);
+      box-shadow: inset -1px -1px 0 var(--win-dark);
+      padding: 3px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .win95-btn:active, .win95-btn.active {
+      border-top: 1px solid var(--win-darker);
+      border-left: 1px solid var(--win-darker);
+      border-right: 1px solid var(--win-light);
+      border-bottom: 1px solid var(--win-light);
+      box-shadow: inset 1px 1px 0 var(--win-dark);
+      padding: 4px 9px 2px 11px;
+    }
+  </style>
 </head>
 <body>
-    <div class="heading">👋 Hello,I'm Lexo.</div>
-    <div>
-        <p>- I'm a CS undergraduate studying in 🇺🇸, and my hometown is Hangzhou.</p>
-        <p>- I'm working on <a href="https://github.com/May-Agent/may">May</a>, <a href="https://github.com/water-rs/waterui">WaterUI</a>, and <a href="https://github.com/zen-rs/skyzen">Skyzen</a>.</p>
-        <p>- I'm a Rustacean who has been learning Rust for 6 years.</p>
-        <p>- I'm also keen to meet people from different backgrounds , so feel free to drop me a message :) </p>
+  <div id="app">
+    <div id="monitor-frame">
+      <!-- Retro BIOS + Snapshot Restore Overlay -->
+      <div id="boot-splash">
+        <div class="bios-header">
+          <div class="bios-title">
+            <strong>Award Modular BIOS v4.51PG, An Energy Star Ally</strong><br />
+            Copyright (C) 1984-96, Award Software, Inc.<br />
+            LEXO-PC i440BX WebAssembly x86 Virtual Machine
+          </div>
+          <div class="energy-badge">
+            ENERGY STAR<br />
+            <strong>EPA POLLUTION PREVENTER</strong>
+          </div>
+        </div>
+
+        <div class="bios-log">
+          <div>Main Processor : <span class="hi">Intel Pentium(R) Pro 100MHz (v86 WebAssembly JIT)</span></div>
+          <div>Memory Test : <span class="hi">65536K OK</span></div>
+          <div>Display Adapter : <span class="hi">VBE SVGA 1024x768x32bpp (8192K VRAM)</span></div>
+          <div>Pointer Device : <span class="ok">VBMOUSE Seamless Absolute Coordinate Driver [1:1 Mode]</span></div>
+          <div>Primary Master : <span class="hi">471MB Windows 95 OSR2 (256KB On-Demand Chunked Disk)</span></div>
+          <div>Primary Slave : <span class="hi">8MB FAT16 Volume [D:\NETSCAPE\NETSCAPE.EXE v3.0]</span></div>
+          <div>Network Adapter : <span class="ok">NE2000 Compatible (IRQ 10, I/O 0x300) -&gt; Host Fetch Relay</span></div>
+          <br />
+          <div id="bios-step-line">Restoring hibernated VM state (<span class="hi">win95-netscape.state.bin.zst</span>)...</div>
+        </div>
+
+        <div class="win95-loader-box">
+          <div class="win95-titlebar">
+            <span>Starting Microsoft Windows 95 &amp; Netscape Navigator 3.0...</span>
+            <span>lexo.cool</span>
+          </div>
+          <div class="win95-body">
+            <div class="win95-status-row">
+              <span id="load-status-text">Downloading compressed memory snapshot...</span>
+              <strong id="load-pct-text">0%</strong>
+            </div>
+            <div class="win95-progress-well">
+              <div id="load-progress-bar" class="win95-progress-fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bios-footer">
+          <span> Seamless Mouse Active (No Pointer Lock required)</span>
+          <span>11/02/1996-i440BX-LEXO-00</span>
+        </div>
+      </div>
+
+      <!-- Host External Link Toast -->
+      <div id="ext-link-toast">
+        <div class="win95-titlebar">
+          <span>Netscape Navigator — External Link Bridge</span>
+          <button class="win95-btn" id="toast-close-btn" style="padding:0 4px;line-height:1;">✕</button>
+        </div>
+        <div class="toast-body">
+          <div>You clicked an external link inside Windows 95 Netscape. A retro preview was loaded inside the VM, and you can also open the live site in your modern browser:</div>
+          <div class="toast-url" id="toast-url-display">https://github.com/lexoliu</div>
+          <div class="toast-actions">
+            <a id="toast-open-link" href="https://github.com/lexoliu" target="_blank" rel="noopener noreferrer" class="win95-btn">
+              <strong>Open in Modern Browser ↗</strong>
+            </a>
+            <button class="win95-btn" id="toast-dismiss-btn">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- v86 Screen Container -->
+      <div id="screen_container">
+        <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+        <canvas style="display: none"></canvas>
+      </div>
     </div>
-    <div>
-        <p>Twitter: <a href="https://twitter.com/is_lexo">@is_lexo</a></p>
-        <p>Github: <a href="https://github.com/lexoliu">@lexoliu</a></p>
-        <p>Email: <a href="mailto:me@lexo.cool">me@lexo.cool</a></p>
-    </div>
+  </div>
+
+  <script src="/public/vm/libv86.js"></script>
+  <script>
+    // =========================================================================
+    // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
+    // =========================================================================
+    const NAV_BAR = `
+<TR><TD BGCOLOR="#DFDFDF" ALIGN="CENTER">
+<FONT SIZE="-1">
+<B>[ <A HREF="http://lexo.cool/">Home</A> ]</B> &nbsp;|&nbsp;
+<B>[ <A HREF="http://lexo.cool/projects.html">Open Source Projects</A> ]</B> &nbsp;|&nbsp;
+<B>[ <A HREF="http://lexo.cool/about.html">About &amp; Notes</A> ]</B> &nbsp;|&nbsp;
+<B>[ <A HREF="http://lexo.cool/photos.html">Photo Album</A> ]</B> &nbsp;|&nbsp;
+<B>[ <A HREF="http://github.com/lexoliu">GitHub (@lexoliu)</A> ]</B>
+</FONT>
+</TD></TR>`;
+
+    function wrapHtml32(title, subtitle, bodyContent) {
+      return `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+<TITLE>${title}</TITLE>
+</HEAD>
+<BODY BGCOLOR="#C0C0C0" TEXT="#000000" LINK="#0000EE" VLINK="#551A8B" ALINK="#FF0000">
+<CENTER>
+<TABLE WIDTH="96%" BORDER="2" CELLPADDING="8" CELLSPACING="0" BGCOLOR="#FFFFFF">
+<TR><TD BGCOLOR="#000080">
+<TABLE WIDTH="100%" BORDER="0" CELLPADDING="0" CELLSPACING="0">
+<TR>
+<TD><FONT COLOR="#FFFFFF" SIZE="+1"><B>${subtitle}</B></FONT></TD>
+<TD ALIGN="RIGHT"><FONT COLOR="#FFFF00" SIZE="-1"><B>[Est. 1996 / Rustacean]</B></FONT></TD>
+</TR>
+</TABLE>
+</TD></TR>
+${NAV_BAR}
+<TR><TD>
+${bodyContent}
+<P ALIGN="CENTER">
+<FONT SIZE="-2" COLOR="#555555">Best viewed with <B>Netscape Navigator 3.0</B> at 1024x768 &bull; Powered by v86 Windows 95 Virtual Machine</FONT>
+</P>
+</TD></TR>
+</TABLE>
+</CENTER>
+</BODY>
+</HTML>`;
+    }
+
+    const PAGES = {
+      "/": wrapHtml32(
+        "Lexo Liu - Personal Home Page (http://lexo.cool/)",
+        "Lexo Liu's Personal Home Page - lexo.cool",
+        `<FONT SIZE="+2"><B>Hello, I'm Lexo.</B></FONT>
+<HR SIZE="2">
+<UL>
+<LI>I'm a <B>CS undergraduate</B> studying in the US, and my hometown is <B>Hangzhou</B>.
+<LI>I'm working on <A HREF="http://github.com/May-Agent/may"><B>May</B></A>, <A HREF="http://github.com/water-rs/waterui"><B>WaterUI</B></A> (a cross-platform GUI kit in Rust), and <A HREF="http://github.com/zen-rs/skyzen"><B>Skyzen</B></A>.
+<LI>I'm a <B>Rustacean</B> who has been learning &amp; building with Rust for <B>6 years</B>.
+<LI>I'm also keen to meet people from different backgrounds, so feel free to drop me a message :)
+</UL>
+<HR SIZE="1">
+<B>About Me:</B>
+<BLOCKQUOTE>
+<I>"I am but a phantom... Random ideas flash through my mind all the time. I jot them down in a blazing beat, resulting in quite a mess. My work involves sifting through this mess to find something valuable. It is what I do."</I>
+</BLOCKQUOTE>
+<HR SIZE="1">
+<TABLE WIDTH="100%" BORDER="1" CELLPADDING="4" CELLSPACING="0" BGCOLOR="#F4F4F4">
+<TR BGCOLOR="#008080">
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF" SIZE="-1">Project / Link</FONT></TH>
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF" SIZE="-1">Description &amp; URL</FONT></TH>
+</TR>
+<TR><TD><B><A HREF="http://github.com/water-rs/waterui">WaterUI</A></B></TD><TD>Cross-platform reactive GUI framework written in Rust (<TT>github.com/water-rs/waterui</TT>)</TD></TR>
+<TR><TD><B><A HREF="http://github.com/May-Agent/may">May</A></B></TD><TD>Next-generation agentic project (<TT>github.com/May-Agent/may</TT>)</TD></TR>
+<TR><TD><B><A HREF="http://github.com/zen-rs/skyzen">Skyzen</A></B></TD><TD>Ergonomic, fast HTTP framework in Rust (<TT>github.com/zen-rs/skyzen</TT>)</TD></TR>
+<TR><TD><B>Contact</B></TD><TD>Twitter: <A HREF="http://twitter.com/is_lexo">@is_lexo</A> &nbsp;|&nbsp; GitHub: <A HREF="http://github.com/lexoliu">@lexoliu</A> &nbsp;|&nbsp; Email: <A HREF="mailto:me@lexo.cool">me@lexo.cool</A></TD></TR>
+</TABLE>`
+      ),
+
+      "/projects.html": wrapHtml32(
+        "Lexo Liu - Open Source Projects",
+        "Lexo's Open Source Rust & Systems Projects",
+        `<FONT SIZE="+1"><B>Featured Open Source Projects</B></FONT>
+<HR SIZE="2">
+<TABLE WIDTH="100%" BORDER="2" CELLPADDING="8" CELLSPACING="0" BGCOLOR="#F8F8F8">
+<TR BGCOLOR="#008080">
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF">Repository</FONT></TH>
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF">Overview</FONT></TH>
+<TH ALIGN="CENTER"><FONT COLOR="#FFFFFF">Inspect</FONT></TH>
+</TR>
+<TR>
+<TD VALIGN="TOP"><B>water-rs / WaterUI</B><BR><FONT SIZE="-1" COLOR="#555555">Rust / GUI</FONT></TD>
+<TD VALIGN="TOP">A modern, cross-platform reactive GUI kit written in pure Rust. Designed for ergonomics, native rendering, and zero-cost abstractions.</TD>
+<TD VALIGN="TOP" ALIGN="CENTER"><A HREF="http://github.com/water-rs/waterui"><B>[View Repo]</B></A></TD>
+</TR>
+<TR>
+<TD VALIGN="TOP"><B>May-Agent / May</B><BR><FONT SIZE="-1" COLOR="#555555">AI / Systems</FONT></TD>
+<TD VALIGN="TOP">Agentic runtime and workspace orchestrator designed for autonomous software engineering workflows.</TD>
+<TD VALIGN="TOP" ALIGN="CENTER"><A HREF="http://github.com/May-Agent/may"><B>[View Repo]</B></A></TD>
+</TR>
+<TR>
+<TD VALIGN="TOP"><B>zen-rs / Skyzen</B><BR><FONT SIZE="-1" COLOR="#555555">Rust / HTTP</FONT></TD>
+<TD VALIGN="TOP">Fast, modular, and type-safe async HTTP web framework for the Rust ecosystem.</TD>
+<TD VALIGN="TOP" ALIGN="CENTER"><A HREF="http://github.com/zen-rs/skyzen"><B>[View Repo]</B></A></TD>
+</TR>
+</TABLE>
+<P>
+<FONT SIZE="-1">Tip: Clicking any GitHub link above fetches live repository metadata via the host browser and also lets you open the repository in a modern tab.</FONT>`
+      ),
+
+      "/about.html": wrapHtml32(
+        "Lexo Liu - About & Philosophy",
+        "About Lexo Liu - Notes from Cyberspace",
+        `<FONT SIZE="+1"><B>Background &amp; Philosophy</B></FONT>
+<HR SIZE="2">
+<P>Hi! I'm <B>Lexo Liu</B>, currently pursuing my undergraduate degree in Computer Science in the United States, originally from <B>Hangzhou, China</B>.
+<P>I have been writing <B>Rust</B> for over 6 years, focusing on UI toolkits (<B>WaterUI</B>), web/network infrastructure (<B>Skyzen</B>), and developer tooling.
+<BLOCKQUOTE>
+<I>"I am but a phantom... Random ideas flash through my mind all the time. I jot them down in a blazing beat, resulting in quite a mess. My work involves sifting through this mess to find something valuable. It is what I do."</I>
+</BLOCKQUOTE>
+<HR SIZE="1">
+<B>Why a Windows 95 Virtual Machine?</B>
+<UL>
+<LI><B>Real x86 Emulation:</B> This isn't a CSS theme. You are interacting with a real 32-bit Windows 95 OSR2 operating system running inside WebAssembly (<TT>v86</TT>).
+<LI><B>Netscape Navigator 3.0 (1996):</B> Every page you view here is rendered by the authentic 1996 Netscape layout engine over a virtual NE2000 Ethernet card.
+<LI><B>Host-Bridged Networking:</B> HTTP packets leaving Windows 95 are intercepted in browser JavaScript via <TT>FetchNetworkAdapter</TT> and served dynamically.
+</UL>`
+      ),
+
+      "/photos.html": wrapHtml32(
+        "Lexo Liu - Photo Album",
+        "Lexo's Retro Cyberspace Photo Album",
+        `<FONT SIZE="+1"><B>Photo Categories</B></FONT>
+<HR SIZE="2">
+<P>Welcome to the low-bandwidth HTML 3.2 edition of my photo archive:
+<TABLE WIDTH="100%" BORDER="1" CELLPADDING="8" CELLSPACING="0" BGCOLOR="#F4F4F4">
+<TR BGCOLOR="#000080">
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF">Album</FONT></TH>
+<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF">Description</FONT></TH>
+</TR>
+<TR>
+<TD><B>[Travel]</B></TD>
+<TD>Snapshots from Hangzhou, US college towns, and road trips across coast-to-coast flights.</TD>
+</TR>
+<TR>
+<TD><B>[Kitchen]</B></TD>
+<TD>Late-night home cooking experiments after long Rust compilation sessions.</TD>
+</TR>
+<TR>
+<TD><B>[Misc &amp; Hardware]</B></TD>
+<TD>Retro computing setups, mechanical keyboards, and random sparks of inspiration.</TD>
+</TR>
+</TABLE>
+<P><A HREF="http://lexo.cool/">&laquo; Return to Home Page</A>`
+      ),
+    };
+
+    const toastEl = document.getElementById("ext-link-toast");
+    const toastUrlDisplay = document.getElementById("toast-url-display");
+    const toastOpenLink = document.getElementById("toast-open-link");
+
+    function showExternalToast(httpsUrl) {
+      toastUrlDisplay.textContent = httpsUrl;
+      toastOpenLink.href = httpsUrl;
+      toastEl.classList.add("visible");
+    }
+
+    document.getElementById("toast-close-btn").onclick = () => toastEl.classList.remove("visible");
+    document.getElementById("toast-dismiss-btn").onclick = () => toastEl.classList.remove("visible");
+
+    async function buildExternalBridgePage(parsedUrl) {
+      const host = parsedUrl.hostname.toLowerCase();
+      const pathname = parsedUrl.pathname;
+      const httpsUrl = `https://${host}${pathname}`;
+      showExternalToast(httpsUrl);
+
+      if (host === "github.com") {
+        const parts = pathname.split("/").filter(Boolean);
+        if (parts.length >= 2) {
+          const [owner, repo] = parts;
+          try {
+            const apiRes = await origFetch(`https://api.github.com/repos/${owner}/${repo}`);
+            if (apiRes.ok) {
+              const info = await apiRes.json();
+              return wrapHtml32(
+                `GitHub - ${info.full_name}`,
+                `GitHub Bridge: ${info.full_name}`,
+                `<FONT SIZE="+1"><B>${info.full_name}</B></FONT>
+<P>${info.description || "No description provided."}
+<HR SIZE="1">
+<TABLE WIDTH="100%" BORDER="1" CELLPADDING="5" CELLSPACING="0" BGCOLOR="#F4F4F4">
+<TR><TD><B>Stars</B></TD><TD>${info.stargazers_count} &#9733;</TD><TD><B>Forks</B></TD><TD>${info.forks_count}</TD></TR>
+<TR><TD><B>Primary Language</B></TD><TD>${info.language || "Rust"}</TD><TD><B>License</B></TD><TD>${(info.license && info.license.spdx_id) || "MIT/Apache-2.0"}</TD></TR>
+<TR><TD><B>Modern URL</B></TD><TD COLSPAN="3"><TT>${httpsUrl}</TT></TD></TR>
+</TABLE>
+<P><B>Note:</B> Use the popup in the top-right corner of the monitor to open <TT>${httpsUrl}</TT> in your host browser, or <A HREF="http://lexo.cool/">return to lexo.cool</A>.`
+              );
+            }
+          } catch (_) {
+            // Fall through to static bridge card if rate-limited or offline
+          }
+        }
+      }
+
+      return wrapHtml32(
+        `External Link - ${httpsUrl}`,
+        `External Cyberspace Link`,
+        `<FONT SIZE="+1"><B>External Destination: ${httpsUrl}</B></FONT>
+<HR SIZE="2">
+<P>Netscape Navigator 3.0 (1996) only supports HTTP/1.0 and SSLv3, so modern TLS 1.3 websites cannot be established directly inside the guest OS.
+<P>A <B>Host Browser Bridge</B> dialog has been opened in the top-right corner so you can launch <TT>${httpsUrl}</TT> in a new tab.
+<P><A HREF="http://lexo.cool/">&laquo; Return to Lexo's Home Page (lexo.cool)</A>`
+      );
+    }
+
+    // Intercept global fetch for both hda chunk fallback and guest Netscape HTTP traffic
+    const origFetch = window.fetch.bind(window);
+    window.fetch = async function(input, init) {
+      const rawUrl = typeof input === "string" ? input : (input && input.url) || String(input);
+
+      // 1. Local VM assets & on-demand disk chunks (with remote fallback if any rare chunk wasn't cached)
+      if (
+        rawUrl.startsWith("/public/vm/") ||
+        rawUrl.startsWith(window.location.origin + "/public/vm/")
+      ) {
+        const res = await origFetch(input, init);
+        if (!res.ok && rawUrl.includes("/public/vm/hda/")) {
+          const chunkFile = rawUrl.split("/public/vm/hda/")[1];
+          return origFetch(`https://i.copy.sh/windows95-v3/${chunkFile}`, init);
+        }
+        return res;
+      }
+
+      // 2. Guest OS HTTP requests coming from Netscape Navigator 3.0 via FetchNetworkAdapter
+      let parsed;
+      try {
+        parsed = new URL(rawUrl);
+      } catch (_) {
+        return origFetch(input, init);
+      }
+
+      const host = parsed.hostname.toLowerCase();
+      if (host === "lexo.cool" || host === "www.lexo.cool") {
+        const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
+        const html = PAGES[pathKey] || PAGES["/"];
+        const bytes = new TextEncoder().encode(html);
+        return new Response(bytes, {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Length": String(bytes.byteLength),
+          },
+        });
+      }
+
+      if (
+        host.endsWith("github.com") ||
+        host.endsWith("twitter.com") ||
+        host.endsWith("x.com") ||
+        parsed.protocol === "http:"
+      ) {
+        const html = await buildExternalBridgePage(parsed);
+        const bytes = new TextEncoder().encode(html);
+        return new Response(bytes, {
+          status: 200,
+          statusText: "OK",
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Length": String(bytes.byteLength),
+          },
+        });
+      }
+
+      return origFetch(input, init);
+    };
+
+    // =========================================================================
+    // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
+    // =========================================================================
+    const bootSplash = document.getElementById("boot-splash");
+    const progressBar = document.getElementById("load-progress-bar");
+    const pctText = document.getElementById("load-pct-text");
+    const statusText = document.getElementById("load-status-text");
+
+    const emulator = new V86({
+      wasm_path: "/public/vm/v86.wasm",
+      memory_size: 64 * 1024 * 1024,
+      vga_memory_size: 8 * 1024 * 1024,
+      screen_container: document.getElementById("screen_container"),
+      bios: { url: "/public/vm/seabios.bin" },
+      vga_bios: { url: "/public/vm/vgabios.bin" },
+      hda: {
+        url: "/public/vm/hda/.img",
+        size: 471859200,
+        async: true,
+        fixed_chunk_size: 256 * 1024,
+        use_parts: true,
+      },
+      hdb: {
+        url: "/public/vm/hdb.img?v=3",
+        size: 8257536,
+        async: false,
+      },
+      initial_state: {
+        url: "/public/vm/win95-netscape.state.bin.zst?v=3",
+      },
+      disable_mouse: true,
+      network_relay_url: "fetch",
+      autostart: true,
+    });
+
+    window.emulator = emulator;
+
+    // =========================================================================
+    // 2b. Custom Pointer & Touch Input Bridge (Fixes v86 outside-click & PS/2 bugs)
+    // =========================================================================
+    const screenContainer = document.getElementById("screen_container");
+    let pointerButtons = [false, false, false]; // [left, middle, right]
+    let lastClientX = null;
+    let lastClientY = null;
+
+    function sendGuestPointer(clientX, clientY, buttonsChanged) {
+      if (!emulator || !emulator.bus) return;
+      const rect = screenContainer.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      let dx = 0;
+      let dy = 0;
+      if (lastClientX !== null && lastClientY !== null) {
+        dx = clientX - lastClientX;
+        dy = clientY - lastClientY;
+      }
+      lastClientX = clientX;
+      lastClientY = clientY;
+
+      // VBMOUSE needs a tiny PS/2 movement packet (IRQ 12) to wake up and read the 0x5658 absolute queue!
+      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+      const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+      emulator.bus.send("mouse-absolute", [x, y, rect.width, rect.height]);
+      if (dx !== 0 || dy !== 0) {
+        emulator.bus.send("mouse-delta", [dx, -dy]);
+      }
+      if (buttonsChanged) {
+        emulator.bus.send("mouse-click", [pointerButtons[0], pointerButtons[1], pointerButtons[2]]);
+      }
+    }
+
+    function releaseAllPointerButtons() {
+      if (pointerButtons[0] || pointerButtons[1] || pointerButtons[2]) {
+        pointerButtons = [false, false, false];
+        if (emulator && emulator.bus) {
+          emulator.bus.send("mouse-click", [false, false, false]);
+        }
+      }
+    }
+
+    screenContainer.addEventListener("mousemove", (e) => {
+      // Sync button state from e.buttons bitmask in case mouseup occurred outside window
+      const left = (e.buttons & 1) !== 0;
+      const right = (e.buttons & 2) !== 0;
+      const middle = (e.buttons & 4) !== 0;
+      const changed =
+        left !== pointerButtons[0] ||
+        middle !== pointerButtons[1] ||
+        right !== pointerButtons[2];
+      pointerButtons = [left, middle, right];
+      sendGuestPointer(e.clientX, e.clientY, changed);
+    });
+
+    screenContainer.addEventListener("mousedown", (e) => {
+      if (e.button === 0) pointerButtons[0] = true;
+      else if (e.button === 1) pointerButtons[1] = true;
+      else if (e.button === 2) pointerButtons[2] = true;
+      sendGuestPointer(e.clientX, e.clientY, true);
+      window.focus();
+      e.preventDefault();
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : e.button === 2 ? 2 : -1;
+      if (idx !== -1 && pointerButtons[idx]) {
+        pointerButtons[idx] = false;
+        sendGuestPointer(e.clientX, e.clientY, true);
+      }
+    });
+
+    window.addEventListener("blur", releaseAllPointerButtons);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) releaseAllPointerButtons();
+    });
+
+    screenContainer.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    screenContainer.addEventListener(
+      "wheel",
+      (e) => {
+        if (!emulator || !emulator.bus) return;
+        const delta = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
+        if (delta !== 0) {
+          emulator.bus.send("mouse-wheel", [delta, 0]);
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    // Mobile Touch Support: Tap to click, 1-finger vertical drag to scroll page
+    let touchState = null;
+    screenContainer.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length === 1) {
+          const t = e.touches[0];
+          touchState = {
+            startX: t.clientX,
+            startY: t.clientY,
+            lastY: t.clientY,
+            moved: false,
+          };
+          sendGuestPointer(t.clientX, t.clientY, false);
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    screenContainer.addEventListener(
+      "touchmove",
+      (e) => {
+        if (e.touches.length === 1 && touchState) {
+          const t = e.touches[0];
+          const dx = t.clientX - touchState.startX;
+          const dy = t.clientY - touchState.startY;
+          if (Math.hypot(dx, dy) > 8) {
+            touchState.moved = true;
+          }
+          sendGuestPointer(t.clientX, t.clientY, false);
+          // Scroll Netscape with Up/Down arrow scancodes when swiping vertically
+          const stepY = t.clientY - touchState.lastY;
+          if (Math.abs(stepY) >= 24) {
+            touchState.lastY = t.clientY;
+            if (stepY < 0) {
+              // Swipe up -> scroll down (Down Arrow E0 50)
+              emulator.keyboard_send_scancodes([0xe0, 0x50, 0xe0, 0xd0]);
+            } else {
+              // Swipe down -> scroll up (Up Arrow E0 48)
+              emulator.keyboard_send_scancodes([0xe0, 0x48, 0xe0, 0xc8]);
+            }
+          }
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    screenContainer.addEventListener(
+      "touchend",
+      (e) => {
+        if (touchState && !touchState.moved) {
+          pointerButtons[0] = true;
+          sendGuestPointer(touchState.startX, touchState.startY, true);
+          setTimeout(() => {
+            pointerButtons[0] = false;
+            sendGuestPointer(touchState.startX, touchState.startY, true);
+          }, 45);
+        }
+        touchState = null;
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    emulator.add_listener("download-progress", (e) => {
+      if (e && e.total > 0) {
+        const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+        progressBar.style.width = `${Math.max(8, pct)}%`;
+        pctText.textContent = `${pct}%`;
+        const fileBase = (e.file_name || "").split("/").pop();
+        if (fileBase) {
+          statusText.textContent = `Loading ${fileBase} (${(e.loaded / 1048576).toFixed(1)} / ${(e.total / 1048576).toFixed(1)} MB)...`;
+        }
+      }
+    });
+
+    // =========================================================================
+    // 3. Automatic Native Resolution Sync via COM1 -> RESCHG.EXE
+    // =========================================================================
+    const VBE_MODES = [
+      [640, 480],    // 4:3 (1.33)
+      [800, 600],    // 4:3 (1.33)
+      [1024, 768],   // 4:3 (1.33)
+      [1152, 864],   // 4:3 (1.33)
+      [1280, 720],   // 16:9 (1.78)
+      [1280, 768],   // 15:9 (1.67)
+      [1280, 800],   // 16:10 (1.60)
+      [1280, 960],   // 4:3 (1.33)
+      [1280, 1024],  // 5:4 (1.25)
+      [1400, 1050],  // 4:3 (1.33)
+      [1440, 900],   // 16:10 (1.60, default snapshot mode)
+      [1600, 900],   // 16:9 (1.78)
+      [1600, 1200],  // 4:3 (1.33)
+      [1680, 1050],  // 16:10 (1.60)
+    ];
+
+    const monitorFrame = document.getElementById("monitor-frame");
+    let currentVmMode = [1440, 900];
+    let vmLoaded = false;
+
+    function updateFrameLayout(vw, vh, mw, mh) {
+      const targetAspect = vw / Math.max(1, vh);
+      const modeAspect = mw / mh;
+      // If viewport aspect is within 12% of the VBE mode aspect, fill 100%;
+      // otherwise preserve exact 1:1 square pixels centered on Win95 teal background
+      if (Math.abs(targetAspect - modeAspect) / modeAspect <= 0.12) {
+        monitorFrame.style.width = "100vw";
+        monitorFrame.style.height = "100vh";
+      } else {
+        monitorFrame.style.width = `min(100vw, calc(100vh * (${mw} / ${mh})))`;
+        monitorFrame.style.height = `min(100vh, calc(100vw * (${mh} / ${mw})))`;
+      }
+    }
+
+    function pickBestVbeMode(vw, vh) {
+      const targetAspect = vw / Math.max(1, vh);
+      let best = VBE_MODES[0];
+      let bestScore = Infinity;
+      for (const [mw, mh] of VBE_MODES) {
+        const aspectDiff = Math.abs(mw / mh - targetAspect);
+        const targetW = Math.min(1440, Math.max(640, vw));
+        const sizeDiff = Math.abs(mw - targetW) / 1600;
+        const score = aspectDiff * 3.5 + sizeDiff;
+        if (score < bestScore) {
+          bestScore = score;
+          best = [mw, mh];
+        }
+      }
+      return best;
+    }
+
+    function syncGuestResolution() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const [bestW, bestH] = pickBestVbeMode(vw, vh);
+      updateFrameLayout(vw, vh, bestW, bestH);
+      if (!vmLoaded) return;
+      if (bestW !== currentVmMode[0] || bestH !== currentVmMode[1]) {
+        currentVmMode = [bestW, bestH];
+        emulator.serial0_send(`RES ${bestW} ${bestH}\n`);
+      }
+    }
+
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(() => {
+        clearTimeout(syncGuestResolution._t);
+        syncGuestResolution._t = setTimeout(syncGuestResolution, 180);
+      }).observe(document.documentElement);
+    }
+    window.addEventListener("resize", () => {
+      clearTimeout(syncGuestResolution._t);
+      syncGuestResolution._t = setTimeout(syncGuestResolution, 180);
+    });
+
+    emulator.add_listener("emulator-loaded", () => {
+      vmLoaded = true;
+      progressBar.style.width = "100%";
+      pctText.textContent = "100%";
+      statusText.textContent = "Decompressing x86 CPU & SVGA state...";
+      syncGuestResolution();
+      setTimeout(() => {
+        bootSplash.classList.add("hidden");
+      }, 250);
+    });
+  </script>
 </body>
 </html>
