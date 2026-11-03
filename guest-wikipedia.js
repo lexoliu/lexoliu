@@ -9,6 +9,7 @@
 //                                  fulltext=1 always lists results                    ?offset=N
 //   /_img?u=URL&w=WIDTH, /_real/PATH (opens en.wikipedia.org/PATH in the host browser)
 // Anything else on the host (Special: pages, edit forms, ...) opens on the real Wikipedia in the host browser.
+import { Highlighter } from "./guest-highlight.js";
 import { renderNodes } from "./guest-html.js";
 import { ImageProxy, Memo, NotFound, Upstream, htmlResponse, noContent, pager } from "./guest-site.js";
 import { guestText } from "./guest-text.js";
@@ -91,6 +92,16 @@ function inFlow(node) {
   return node.parentElement?.closest("table, figure") === null;
 }
 
+/** The class Wikipedia's syntaxhighlight extension names a code block's or inline code's language with. */
+const CODE_LANGUAGE = /^mw-highlight-lang-(.+)$/;
+
+/** The element holding the code of a syntaxhighlight box: the <pre> of a block, the <code> itself inline. */
+function codeOf(box) {
+  if (box.tagName === "CODE") return box;
+  const pre = box.querySelector(":scope > pre");
+  if (pre === null) throw new Error(`syntaxhighlight block ${box.id} has no <pre>`);
+  return pre;
+}
 
 /** A formula as its source text (what the wikitext holds), on a line of its own when Wikipedia shows it so. */
 function formula(math) {
@@ -118,17 +129,19 @@ export class WikipediaSite {
   #fetch;
   #openHost;
   #images;
+  #highlighter;
   /** Responses of the APIs, by URL; articles rendered into pages, by title. */
   #responses = new Memo();
   #articles = new Memo();
 
   /**
    * `fetch` is the host browser's; `openHost(url)` opens a URL in the visitor's browser (the page's
-   * existing mechanism for links off the guest's site).
+   * existing mechanism for links off the guest's site); `highlighter` colors the articles' code.
    */
-  constructor({ fetch, openHost }) {
+  constructor({ fetch, openHost, highlighter = new Highlighter() }) {
     this.#fetch = fetch;
     this.#openHost = openHost;
+    this.#highlighter = highlighter;
     this.#images = new ImageProxy({ fetch, site: SITE, maxWidth: INFOBOX_IMAGE_WIDTH, maxBytes: MAX_IMAGE_BYTES });
   }
 
@@ -339,8 +352,24 @@ ${hits.length === 0 ? "" : `<P>Articles that may be what you want:\n${this.#hitL
         if (error instanceof NotFound) return { missing: true };
         throw error;
       }
-      return this.#paginate(new DOMParser().parseFromString(html, "text/html"));
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      return this.#paginate(doc, await this.#highlight(doc));
     });
+  }
+
+  /** The highlighted lines of the article's code in a language Shiki knows, keyed by the element holding the code. */
+  async #highlight(doc) {
+    const boxes = [...doc.body.querySelectorAll('[class*="mw-highlight-lang-"]')].map((box) => ({
+      code: codeOf(box),
+      name: classes(box).map((name) => CODE_LANGUAGE.exec(name)?.[1]).find((name) => name !== undefined),
+    }));
+    const lines = await Promise.all(
+      boxes.map(async ({ code, name }) => {
+        const lang = await this.#highlighter.languageNamed(name);
+        return lang === undefined ? undefined : this.#highlighter.lines(code.textContent.replace(/\n$/, ""), lang);
+      }),
+    );
+    return new Map(boxes.flatMap(({ code }, i) => (lines[i] === undefined ? [] : [[code, lines[i]]])));
   }
 
   /**
@@ -348,7 +377,7 @@ ${hits.length === 0 ? "" : `<P>Articles that may be what you want:\n${this.#hitL
    * too big for a page is cut along its subsections), the units packed into pages, and every link
    * to a place in the article points at the page that holds it.
    */
-  #paginate(doc) {
+  #paginate(doc, highlighted) {
     const title = normalizeTitle(doc.title);
     const body = doc.body;
     const skip = (node) => classes(node).some((name) => SKIPPED_CLASSES.has(name)) || node.hasAttribute("hidden") || /display\s*:\s*none/.test(node.getAttribute("style") ?? "");
@@ -358,7 +387,12 @@ ${hits.length === 0 ? "" : `<P>Articles that may be what you want:\n${this.#hitL
     };
     const policy = (links) => ({
       skip,
-      custom: (node) => (node.localName === "math" ? formula(node) : undefined),
+      custom: (node) => {
+        if (node.localName === "math") return formula(node);
+        const lines = highlighted.get(node);
+        if (lines === undefined) return undefined;
+        return node.tagName === "PRE" ? `<PRE>${lines.join("\n")}</PRE>\n` : `<TT>${lines.join(" ")}</TT>`;
+      },
       unstyled: (node) => node.tagName === "CITE",
       imageWidth: (node) => (node.closest(".infobox") ? INFOBOX_IMAGE_WIDTH : THUMB_WIDTH),
       float: (node) => this.#float(node),
