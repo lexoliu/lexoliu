@@ -23,19 +23,33 @@
 // every visitor's; the cold boot's reads hold them all. Each round restores the snapshot in a
 // fresh machine as the page does, puts the blocks recorded so far into the disk caches from the
 // disk images, marked to be saved, and
-// saves that state; then it runs the boot from that state once in every mode the page can switch
-// the guest to at power-on (tools/vm/replay.ts), as the page runs it, recording every read: those
-// are the blocks the guest reads for the first time after the snapshot. What the boot reads
-// follows the mode (Netscape lays out its window and the homepage for it) and the guest's
-// wall-clock timers, so a round can read blocks the one before did not; those join the
-// preload and the next round runs, and the first round that reads nothing outside the preload
-// in any mode gives the state. No such round within PRELOAD_ROUNDS fails the build. Blocks the
+// saves that state; then it runs the boot from that state once in each of a set of power-on
+// modes (tools/vm/replay.ts), as the page runs it, recording every read: those are the blocks the
+// guest reads for the first time after the snapshot. The guest's wall-clock timers make a round
+// read blocks the one before did not; those join the preload and the next round runs.
+//
+// The page switches the guest to the viewport's own size at power-on (guest-display.js), so the
+// modes it can ask for are too many to replay each. What the boot reads in them was measured
+// over 58 sizes from 240x320 to 2560x338 and 316x1600, with repeats of two: every mode of at
+// least 320 pixels a side reads the same files, and only which blocks of a few of them changes,
+// with the layout (how much of the homepage shows decides which glyphs of its TrueType fonts get
+// rasterized, and which code of NETSCAPE.EXE and COMCTL32.DLL runs; repeats of one mode read the
+// same blocks of these) or with timing (the registry hives). So every file whose blocks two runs
+// of a round read differently is preloaded whole: which of its blocks a mode reads then cannot
+// matter, and the replayed modes only need to span the bounded space of modes the page asks for
+// (display.ts, build.ts) so that every such file shows its variation. A smaller desktop, such as
+// 300x200, runs code in Explorer and MFC that no replayed mode does, which is why the page asks
+// for none. Preloading every file the boot reads whole instead would add some 30 MB to the
+// state: Explorer reads only the headers of large programs, for their icons.
+// The first round that reads nothing outside the preload in any mode and finds no file left to
+// preload whole gives the state; no such round within PRELOAD_ROUNDS fails the build. Blocks the
 // guest wrote before the snapshot are in the state already and stay as they are; byte ranges a
-// disk pins (the registry hives, the FAT) are preloaded whole.
+// disk pins (the registry hives, the FAT) are preloaded whole from the start.
 //
 // Nothing in the saved state waits on wall-clock time: v86 only moves audio DMA forward when
 // the page's speaker asks for samples, so the sound starts whenever the restored machine runs.
 import { availableParallelism } from "node:os";
+import type { DiskFiles } from "./disk.ts";
 import { VGA_MEMORY_SIZE } from "./display.ts";
 import { BLOCK_SIZE, type DiskBuffer as ReadableDiskBuffer, logReads, newReadLog } from "./reads.ts";
 import type { Frame, ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
@@ -79,6 +93,8 @@ export interface ChunkedDisk {
   image: string;
   /** Byte ranges preloaded whole, whatever a run reads of them. */
   pinned: [number, number][];
+  /** The image's files, for preloading whole those the runs read differently. */
+  files: DiskFiles;
 }
 
 export interface SnapshotInputs {
@@ -91,7 +107,7 @@ export interface SnapshotInputs {
   startupSound: WavFormat;
   /** The screen size the guest boots to; the snapshot fails at any other. */
   screen: [number, number];
-  /** Every display mode the page can ask RESCHG.EXE for at power-on; each round runs each. */
+  /** Display modes the page asks RESCHG.EXE for at power-on, spanning the layouts; each round runs each. */
   powerOnModes: [number, number][];
   /** The power-on mode (one of `powerOnModes`) whose boot also returns the screen it ends on. */
   captureMode: [number, number];
@@ -100,12 +116,14 @@ export interface SnapshotInputs {
 }
 
 export interface DiskPreload {
-  /** Distinct bytes in the preload: the cold boot's reads, the boot after the snapshot's, and the pins. */
+  /** Distinct bytes in the preload: the cold boot's reads, the boot after the snapshot's, the files preloaded whole, and the pins. */
   readBytes: number;
   /** Distinct bytes the cold boot read before the snapshot. */
   coldReadBytes: number;
   /** Blocks put into the state; the rest of the read blocks were written before the snapshot. */
   preloadedBlocks: number;
+  /** The files preloaded whole because the runs read them differently. */
+  wholeFiles: string[];
 }
 
 export interface Snapshot {
@@ -140,6 +158,25 @@ async function preload(buffer: DiskBuffer, image: string, blocks: Set<number>): 
     i = j;
   }
   return wanted.length;
+}
+
+/** The files of `files` in which the `runs` (each the set of blocks one run read) read different blocks. */
+function filesReadDifferently(files: DiskFiles, runs: number[][]): Set<string> {
+  const perRun = runs.map((reads) => {
+    const byFile = new Map<string, number[]>();
+    for (const b of reads) {
+      const file = files.fileOf(b);
+      if (file !== undefined) (byFile.get(file) ?? byFile.set(file, []).get(file)!).push(b);
+    }
+    for (const blocks of byFile.values()) blocks.sort((x, y) => x - y);
+    return byFile;
+  });
+  const differ = new Set<string>();
+  for (const file of new Set(perRun.flatMap((m) => [...m.keys()]))) {
+    const first = perRun[0].get(file)?.join();
+    if (perRun.some((m) => m.get(file)?.join() !== first)) differ.add(file);
+  }
+  return differ;
 }
 
 function deadline(ms: number, what: string): { promise: Promise<never>; clear(): void } {
@@ -293,6 +330,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     hda: pinnedBlocks(inputs.hda).union(coldReads.hda.blocks),
     hdb: pinnedBlocks(inputs.hdb).union(coldReads.hdb.blocks),
   };
+  const wholeFiles = { hda: new Set<string>(), hdb: new Set<string>() };
   // Each boot is a machine of its own on a thread of its own.
   const lanes = availableParallelism();
   for (let round = 1; round <= PRELOAD_ROUNDS; round++) {
@@ -323,21 +361,35 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     const missed = inputs.powerOnModes
       .map((mode, i) => [mode, runs[i].misses] as const)
       .filter(([, m]) => m.hda + m.hdb > 0);
+    const newWholeFiles = { hda: [] as string[], hdb: [] as string[] };
+    for (const name of ["hda", "hdb"] as const) {
+      for (const file of filesReadDifferently(inputs[name].files, runs.map((run) => run.reads[name]))) {
+        if (!wholeFiles[name].has(file)) newWholeFiles[name].push(file);
+      }
+    }
     console.log(
       `snapshot: round ${round} at ${elapsed()}: ${missed.length} of ${runs.length} power-on modes read outside the preload` +
-        missed.map(([[w, h], m]) => ` ${w}x${h} (${m.hda} C:, ${m.hdb} D:)`).join(","),
+        missed.map(([[w, h], m]) => ` ${w}x${h} (${m.hda} C:, ${m.hdb} D:)`).join(",") +
+        `; files read differently, newly preloaded whole: C: ${newWholeFiles.hda.join(" ") || "none"}, D: ${newWholeFiles.hdb.join(" ") || "none"}`,
     );
-    if (missed.length === 0) {
+    if (missed.length === 0 && newWholeFiles.hda.length + newWholeFiles.hdb.length === 0) {
       const report = (name: "hda" | "hdb"): DiskPreload => ({
         readBytes: blocks[name].size * BLOCK_SIZE,
         coldReadBytes: coldReads[name].blocks.size * BLOCK_SIZE,
         preloadedBlocks: preloaded[name],
+        wholeFiles: [...wholeFiles[name]].sort(),
       });
       const frame = runs[inputs.powerOnModes.findIndex(([w, h]) => w === inputs.captureMode[0] && h === inputs.captureMode[1])].frame;
       if (!frame) throw new Error(`the boot in ${inputs.captureMode.join("x")} returned no screen`);
       return { state, hda: report("hda"), hdb: report("hdb"), frame };
     }
-    for (const run of runs) for (const name of ["hda", "hdb"] as const) for (const b of run.reads[name]) blocks[name].add(b);
+    for (const name of ["hda", "hdb"] as const) {
+      for (const run of runs) for (const b of run.reads[name]) blocks[name].add(b);
+      for (const file of newWholeFiles[name]) {
+        wholeFiles[name].add(file);
+        for (const b of inputs[name].files.blocksOf(file)) blocks[name].add(b);
+      }
+    }
   }
-  throw new Error(`the boot after the startup sound still read outside the preload after ${PRELOAD_ROUNDS} rounds`);
+  throw new Error(`the boot after the startup sound still read outside the preload, or read files differently, after ${PRELOAD_ROUNDS} rounds`);
 }

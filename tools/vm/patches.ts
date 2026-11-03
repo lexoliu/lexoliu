@@ -1,6 +1,5 @@
 // Every modification applied to upstream inputs. Each byte patch states the bytes it
 // expects, so a changed input fails the build instead of being patched blindly.
-import { vbempModePatches, vgaBiosModePatches } from "./display.ts";
 
 export interface BytePatch {
   offset: number;
@@ -31,9 +30,6 @@ export const netscapeExePatches: BytePatch[] = [
   { offset: 0x6a621, from: "7417", to: "eb17", why: "ignore a stale NETSCAPE.LCK" },
 ];
 
-/** v86's VGA BIOS as served to the guest: the added display modes (display.ts). */
-export const vgaBiosPatches: BytePatch[] = vgaBiosModePatches();
-
 /** A file on the C: drive rewritten from its upstream content. */
 export interface FilePatch {
   path: string; // DOS path inside the partition, e.g. "/AUTOEXEC.BAT"
@@ -41,10 +37,29 @@ export interface FilePatch {
   apply(content: Uint8Array): Uint8Array;
 }
 
-/** The Windows display driver, VBE Miniport. */
-export const VBEMP_PATH = "/WINDOWS/SYSTEM/VBEMP.DRV";
+/** A file added to the C: drive, copied from `from` on the host. */
+export interface FileAdd {
+  path: string; // DOS path inside the partition
+  from: string;
+  why: string;
+}
 
-const REGEDIT_IMPORT = "C:\\WINDOWS\\REGEDIT.EXE D:\\NETSCAPE.REG";
+/** Where the display driver (vbe9x, display.ts) goes: Windows loads display drivers from SYSTEM. */
+export const VBE9X_DRV_PATH = "/WINDOWS/SYSTEM/VBE9X.DRV";
+
+/** The display adapter's class key, which the base image points at VBE Miniport (VBEMP.DRV). */
+const DISPLAY_CLASS_KEY = "HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\Class\\Display\\0000";
+
+/**
+ * Run before Windows starts, in order: drop the display class key (VBE Miniport's driver,
+ * VxD and mode list), import vbe9x's own key, then NETSCAPE.REG (Run and RunServices keys,
+ * Netscape settings, and the boot display size, which overrides vbe9x's default).
+ */
+const REGEDIT_LINES = [
+  `C:\\WINDOWS\\REGEDIT.EXE /D ${DISPLAY_CLASS_KEY}`,
+  "C:\\WINDOWS\\REGEDIT.EXE D:\\VBE9X\\VBE9X.REG",
+  "C:\\WINDOWS\\REGEDIT.EXE D:\\NETSCAPE.REG",
+];
 
 /**
  * SB16SND.DRV's [sndblst.drv] intrate in SYSTEM.INI: the wave interrupts per second, from
@@ -61,12 +76,12 @@ const SB16_SECTION = "[sndblst.drv]";
 export const cDrivePatches: FilePatch[] = [
   {
     path: "/AUTOEXEC.BAT",
-    why: "import D:\\NETSCAPE.REG (Run and RunServices keys, Netscape and display settings) before Windows starts",
+    why: "switch the display to vbe9x and import D:\\NETSCAPE.REG before Windows starts",
     apply(content) {
       const text = Buffer.from(content).toString("latin1");
-      if (text.includes(REGEDIT_IMPORT)) throw new Error("AUTOEXEC.BAT already imports NETSCAPE.REG");
+      if (text.toUpperCase().includes("REGEDIT")) throw new Error("AUTOEXEC.BAT already runs REGEDIT");
       const sep = text.length === 0 || text.endsWith("\r\n") ? "" : "\r\n";
-      return Buffer.from(`${text}${sep}${REGEDIT_IMPORT}\r\n`, "latin1");
+      return Buffer.from(`${text}${sep}${REGEDIT_LINES.join("\r\n")}\r\n`, "latin1");
     },
   },
   {
@@ -78,10 +93,5 @@ export const cDrivePatches: FilePatch[] = [
       const sep = text.length === 0 || text.endsWith("\r\n") ? "" : "\r\n";
       return Buffer.from(`${text}${sep}${SB16_SECTION}\r\nintrate=${SB16_INTERRUPTS_PER_SECOND}\r\n`, "latin1");
     },
-  },
-  {
-    path: VBEMP_PATH,
-    why: "give the display driver the added display modes (display.ts)",
-    apply: (content) => applyBytePatches("VBEMP.DRV", content, vbempModePatches(content)),
   },
 ];

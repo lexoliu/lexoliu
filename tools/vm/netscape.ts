@@ -1,5 +1,5 @@
 // The D: drive contents: Netscape Navigator 3.0 unpacked from its installer, its registry
-// settings and bookmarks, and RESCHG.EXE.
+// settings and bookmarks, RESCHG.EXE, and the display driver's registry key and notices.
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { run } from "./disk.ts";
@@ -92,11 +92,20 @@ export async function buildReschg(workDir: string): Promise<string> {
   return out;
 }
 
+/** vbe9x's release files that go on D: (the driver itself goes on C:, patches.ts). */
+export interface Vbe9xFiles {
+  /** The driver's display class key, imported before Windows starts. */
+  reg: string;
+  /** The license notices of the code the driver is derived from, shipped with it. */
+  notices: string;
+}
+
 /** Lays out the D: root in `rootDir`. */
 export async function buildDriveD(
   installer: string,
   unshield: string,
   reschg: string,
+  vbe9x: Vbe9xFiles,
   rootDir: string,
   workDir: string,
 ): Promise<void> {
@@ -114,4 +123,7 @@ export async function buildDriveD(
   await Bun.write(join(ns, "BOOKMARK.HTM"), crlf(await Bun.file(join(HERE, "guest/bookmark.htm")).text()));
   await Bun.write(join(rootDir, "NETSCAPE.REG"), crlf(await Bun.file(join(HERE, "guest/netscape.reg")).text()));
   await Bun.write(join(rootDir, "RESCHG.EXE"), Bun.file(reschg));
+  await mkdir(join(rootDir, "VBE9X"));
+  await Bun.write(join(rootDir, "VBE9X", "VBE9X.REG"), crlf(await Bun.file(vbe9x.reg).text()));
+  await Bun.write(join(rootDir, "VBE9X", "NOTICES.TXT"), crlf(await Bun.file(vbe9x.notices).text()));
 }

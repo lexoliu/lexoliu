@@ -7,6 +7,18 @@
     "url": "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20210601/closure-compiler-v20210601.jar",
     "sha256": "64f161c65a3dba42c9a4f5a79db335ac0e757fcba486cd7928205ac4c258ef08"
   },
+  "vbe9x/vbe9x.drv": {
+    "url": "https://github.com/lexoliu/vbe9x/releases/download/v0.1.0/vbe9x.drv",
+    "sha256": "220fe401f7fd71eeee33c1a5319e8861b5e2a00c963c867bc66e6132582c81d0"
+  },
+  "vbe9x/vbe9x.reg": {
+    "url": "https://github.com/lexoliu/vbe9x/releases/download/v0.1.0/vbe9x.reg",
+    "sha256": "72be136ca8dead0d893f7880eb78bf723cb8cad9d4ebeefdd56e4528d352edf7"
+  },
+  "vbe9x/THIRD-PARTY-NOTICES": {
+    "url": "https://github.com/lexoliu/vbe9x/releases/download/v0.1.0/THIRD-PARTY-NOTICES",
+    "sha256": "038221132f6af52f4b4cd5d648b1cd673140a84083eea891510b4c77787b2b42"
+  },
   "netscape": {
     "url": "https://sdfox7.com/netscape/win32/N32E30.EXE",
     "sha256": "2b4672c2ecad95ec3e9c12bf2cb816d2b7c2990476a7bcc91112c77034448a95"

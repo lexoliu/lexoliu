@@ -372,7 +372,7 @@
     // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
     // =========================================================================
     import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf, wrapHtml32 } from "/guest-pages.js";
-    import { pickGuestMode } from "/guest-display.js";
+    import { guestModeFor } from "/guest-display.js";
 
     // =========================================================================
     // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
@@ -381,8 +381,8 @@
     const powerButton = document.getElementById("power-button");
     const powerProgress = document.getElementById("power-progress");
 
-    // The guest display as the VM generator built it (tools/vm/display.ts): its VRAM size,
-    // the mode in the saved state, and the modes the guest can switch to.
+    // The guest display as the VM generator built it (tools/vm/display.ts): its depth, VRAM
+    // size, the mode in the saved state, and the limits on the sizes it can switch to.
     const guestDisplay = await fetch("/public/vm/modes.json").then(async (res) => {
       if (!res.ok) throw new Error(`modes.json: HTTP ${res.status}`);
       return res.json();
@@ -412,7 +412,7 @@
       // The state also carries every disk block the boot after it reads (tools/vm/snapshot.ts),
       // so pressing power reads no chunk over the network.
       initial_state: {
-        url: "/public/vm/win95-netscape.state.bin.zst?v=8",
+        url: "/public/vm/win95-netscape.state.bin.zst?v=9",
       },
       disable_mouse: true,
       network_relay_url: "fetch",
@@ -783,10 +783,6 @@
     // =========================================================================
     // 3. Automatic Native Resolution Sync via COM1 -> RESCHG.EXE
     // =========================================================================
-    // The guest's mode for the viewport, up to the snapshot mode's pixel count.
-    const [snapshotW, snapshotH] = guestDisplay.snapshotMode;
-    const MAX_GUEST_PIXELS = snapshotW * snapshotH;
-
     const monitorFrame = document.getElementById("monitor-frame");
     let powered = false;
     // RESCHG.EXE listens on COM1 in the saved state: the generator only emits modes.json
@@ -804,7 +800,8 @@
 
     function syncGuestResolution() {
       if (!powered) return;
-      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.visualViewport.width, window.visualViewport.height);
+      // The viewport's own size, up to the snapshot mode's pixel count (guest-display.js).
+      const [w, h] = guestModeFor(guestDisplay, window.visualViewport.width, window.visualViewport.height);
       if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
       requestedMode = [w, h];
       emulator.serial0_send(`RES ${w} ${h}\n`);
