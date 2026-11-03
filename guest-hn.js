@@ -9,7 +9,7 @@
 //   /_out?u=URL   opens URL (a story or a link in a comment) in the host browser
 //   /_real/PATH   opens news.ycombinator.com/PATH in the host browser
 // Anything else on the host (login, submit, voting, ...) opens on the real site.
-import { renderHtml } from "./guest-markdown.js";
+import { renderHtml } from "./guest-html.js";
 import { NotFound, Upstream, htmlResponse, noContent, pager } from "./guest-site.js";
 import { formatAge, formatCount, formatDate, guestText } from "./guest-text.js";
 
