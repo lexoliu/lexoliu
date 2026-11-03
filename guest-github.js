@@ -11,8 +11,9 @@
 //   /_icons/NAME.jpg, /_img?u=URL&w=WIDTH, /_go?q=..., /_real/PATH (opens github.com/PATH in the host browser)
 // Anything else on github.com (issues, pulls, ...) opens on the real GitHub in the host browser.
 import { Highlighter, HIGHLIGHT_MAX_CHARS, plainLines } from "./guest-highlight.js";
-import { ICON_SIZE, canvasJpeg, iconBytes } from "./guest-icons.js";
+import { ICON_SIZE, iconBytes } from "./guest-icons.js";
 import { mailRoute, renderMarkdown } from "./guest-markdown.js";
+import { ImageProxy, NotFound, Upstream, htmlResponse, noContent, pager } from "./guest-site.js";
 import { encodePath, formatBytes, formatCount, formatDate, guestText } from "./guest-text.js";
 
 const SITE = "http://github.com";
@@ -50,10 +51,6 @@ class RateLimited extends Error {
   }
 }
 
-class NotFound extends Error {}
-
-class Upstream extends Error {}
-
 const href = (path) => `${SITE}${path}`;
 const realLink = (path) => href(`/_real${path}`);
 
@@ -67,6 +64,7 @@ export class GitHubSite {
   #now;
   /** In-memory for the session: API/raw responses and rendered pages, by URL. */
   #responses = new Map();
+  #images;
   #pages = new Map();
   #trees = new Map();
   #tokens = new Map();
@@ -77,6 +75,7 @@ export class GitHubSite {
    */
   constructor({ fetch, openHost, highlighter = new Highlighter(), now = () => Date.now() }) {
     this.#fetch = fetch;
+    this.#images = new ImageProxy({ fetch, site: SITE, maxWidth: MAX_IMAGE_WIDTH, maxBytes: MAX_IMAGE_BYTES });
     this.#openHost = openHost;
     this.#highlighter = highlighter;
     this.#now = now;
@@ -90,11 +89,11 @@ export class GitHubSite {
       if (response !== undefined) return response;
       // A GitHub page this site has no rendering of.
       this.#openHost(`${REAL}${url.pathname}${url.search}`);
-      return new Response(null, { status: 204, statusText: "No Content" });
+      return noContent();
     } catch (error) {
-      if (error instanceof RateLimited) return this.#html(200, this.#rateLimitPage(url, error));
-      if (error instanceof NotFound) return this.#html(404, this.#chrome({ title: "Not found", real: url.pathname, crumbs: [], body: `<H2>Not found</H2><P>${guestText(error.message)}` }));
-      if (error instanceof Upstream) return this.#html(502, this.#chrome({ title: "GitHub error", real: url.pathname, crumbs: [], body: `<H2>GitHub could not be reached</H2><P>${guestText(error.message)}<P><A HREF="${guestText(url.pathname + url.search)}">Try again</A>` }));
+      if (error instanceof RateLimited) return htmlResponse(200, this.#rateLimitPage(url, error));
+      if (error instanceof NotFound) return htmlResponse(404, this.#chrome({ title: "Not found", real: url.pathname, crumbs: [], body: `<H2>Not found</H2><P>${guestText(error.message)}` }));
+      if (error instanceof Upstream) return htmlResponse(502, this.#chrome({ title: "GitHub error", real: url.pathname, crumbs: [], body: `<H2>GitHub could not be reached</H2><P>${guestText(error.message)}<P><A HREF="${guestText(url.pathname + url.search)}">Try again</A>` }));
       throw error;
     }
   }
@@ -103,10 +102,10 @@ export class GitHubSite {
     const [owner, repo, kind] = segments;
     const first = owner;
     if (first === "_icons") return this.#icon(segments[1]);
-    if (first === "_img") return this.#image(url);
+    if (first === "_img") return this.#images.handle(url);
     if (first === "_real") {
       this.#openHost(`${REAL}${url.pathname.slice("/_real".length)}${url.search}`);
-      return new Response(null, { status: 204, statusText: "No Content" });
+      return noContent();
     }
     if (first === "_go") return this.#go(url);
     if (segments.length === 0) return this.#cached(url, () => this.#startPage());
@@ -114,15 +113,6 @@ export class GitHubSite {
     if (segments.length === 2) return this.#cached(url, () => this.#repoPage(url, owner, repo));
     if ((kind === "tree" || kind === "blob") && segments.length >= 4) return this.#cached(url, () => this.#pathPage(url, owner, repo, kind, segments.slice(3)));
     return undefined;
-  }
-
-  #html(status, html) {
-    const bytes = new TextEncoder().encode(html);
-    return new Response(bytes, {
-      status,
-      statusText: status === 200 ? "OK" : status === 404 ? "Not Found" : "Error",
-      headers: { "Content-Type": "text/html", "Content-Length": String(bytes.byteLength) },
-    });
   }
 
   /** A rendered page is built once per URL for the session. */
@@ -133,7 +123,7 @@ export class GitHubSite {
       html = await render();
       this.#pages.set(key, html);
     }
-    return this.#html(200, html);
+    return htmlResponse(200, html);
   }
 
   // ---------------------------------------------------------------- upstream
@@ -284,16 +274,8 @@ ${body}
   }
 
   #pager(path, query, page, pages, what) {
-    if (pages <= 1) return "";
     const link = (n, label) => `<A HREF="${guestText(`${href(path)}?${new URLSearchParams({ ...query, page: String(n) })}`)}">${label}</A>`;
-    const parts = [
-      page > 1 ? link(1, "&laquo; First") : "&laquo; First",
-      page > 1 ? link(page - 1, "&lt; Previous") : "&lt; Previous",
-      `<B>${what} page ${page} of ${pages}</B>`,
-      page < pages ? link(page + 1, "Next &gt;") : "Next &gt;",
-      page < pages ? link(pages, "Last &raquo;") : "Last &raquo;",
-    ];
-    return `<P><FONT SIZE="-1">[ ${parts.join(" ] [ ")} ]</FONT>`;
+    return pager(link, page, pages, what);
   }
 
   // ---------------------------------------------------------------- pages
@@ -322,9 +304,9 @@ ${items}
     const target = new URL(`${SITE}/${query.replace(/^\/+/, "")}`);
     const segments = target.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     if (segments.length === 0 || segments[0].startsWith("_")) {
-      return this.#html(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>Enter an owner or owner/repository</H2><P><A HREF="${SITE}/">Back</A>` }));
+      return htmlResponse(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>Enter an owner or owner/repository</H2><P><A HREF="${SITE}/">Back</A>` }));
     }
-    return (await this.#route(target, segments)) ?? this.#html(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>No such page</H2><P><A HREF="${SITE}/">Back</A>` }));
+    return (await this.#route(target, segments)) ?? htmlResponse(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>No such page</H2><P><A HREF="${SITE}/">Back</A>` }));
   }
 
   async #ownerPage(url, owner) {
@@ -357,7 +339,7 @@ ${items}
       real: `/${encodePath([login])}`,
       crumbs: [[login, null]],
       body: `<TABLE WIDTH="100%" BORDER="0" CELLPADDING="6" CELLSPACING="0"><TR>
-<TD WIDTH="72" VALIGN="TOP"><IMG SRC="${href(`/_img?w=64&u=${encodeURIComponent(user.avatar_url)}`)}" WIDTH="64" HEIGHT="64" ALT="${guestText(login)}" BORDER="1"></TD>
+<TD WIDTH="72" VALIGN="TOP"><IMG SRC="${this.#images.url(user.avatar_url, 64)}" WIDTH="64" HEIGHT="64" ALT="${guestText(login)}" BORDER="1"></TD>
 <TD VALIGN="TOP"><FONT SIZE="+2"><B>${guestText(user.name ?? login)}</B></FONT> <FONT COLOR="#555555">${guestText(login)}${user.type === "Organization" ? " (organization)" : ""}</FONT>
 ${user.bio ? `<BR>${guestText(user.bio)}` : ""}
 <BR><FONT SIZE="-1">${facts.map(([k, v]) => `<B>${k}:</B> ${v}`).join(" &nbsp;|&nbsp; ")}</FONT></TD>
@@ -511,7 +493,7 @@ ${readmeHtml}`,
         } else {
           return undefined;
         }
-        return href(`/_img?w=${width}&u=${encodeURIComponent(absolute)}`);
+        return this.#images.url(absolute, width);
       },
     };
   }
@@ -529,7 +511,7 @@ ${readmeHtml}`,
     const rawUrl = `${RAW}/${encodePath([owner, meta.name, ref])}/${encodePath(parts)}`;
 
     if (IMAGE_EXTENSIONS.test(name) && entry.size <= MAX_IMAGE_BYTES) {
-      return page(`${bar(formatBytes(entry.size))}<P><IMG SRC="${guestText(href(`/_img?w=${MAX_IMAGE_WIDTH}&u=${encodeURIComponent(rawUrl)}`))}" ALT="${guestText(name)}" BORDER="1">`);
+      return page(`${bar(formatBytes(entry.size))}<P><IMG SRC="${guestText(this.#images.url(rawUrl, MAX_IMAGE_WIDTH))}" ALT="${guestText(name)}" BORDER="1">`);
     }
     if (entry.size > MAX_VIEW_BYTES) {
       return page(`${bar(formatBytes(entry.size))}<P>This file is ${formatBytes(entry.size)}, too large to show here. Use <B>View on real GitHub</B> above.`);
@@ -589,69 +571,5 @@ ${readmeHtml}`,
 <P>${when === undefined ? "GitHub did not say when it resets; it usually resets within the hour." : `The limit resets at <B>${guestText(when.toLocaleTimeString())}</B>, in about <B>${minutes} minute${minutes === 1 ? "" : "s"}</B>.`}
 <P>Pages already opened in this session still work. <A HREF="${guestText(url.pathname + url.search)}">Try again</A>, or use <B>View on real GitHub</B> above to read this page there.`,
     });
-  }
-
-  // ---------------------------------------------------------------- images
-
-  /** An image for the guest: baseline JPEG (or the GIF itself when small), scaled to `w`. */
-  async #image(url) {
-    const source = url.searchParams.get("u");
-    const width = Math.min(Number(url.searchParams.get("w")) || MAX_IMAGE_WIDTH, MAX_IMAGE_WIDTH);
-    if (!/^https?:\/\//i.test(source ?? "")) throw new NotFound("No such image.");
-    let entry = this.#responses.get(`image:${width}:${source}`);
-    if (entry === undefined) {
-      entry = this.#convertImage(source, width);
-      this.#responses.set(`image:${width}:${source}`, entry);
-      entry.catch(() => this.#responses.delete(`image:${width}:${source}`));
-    }
-    let image;
-    try {
-      image = await entry;
-    } catch (error) {
-      // A picture that cannot be fetched or decoded is a broken image in the guest, not a page error.
-      console.warn(`image ${source}: ${error.message}`);
-      return new Response(null, { status: 404, statusText: "Not Found" });
-    }
-    return new Response(image.bytes, { status: 200, statusText: "OK", headers: { "Content-Type": image.type, "Content-Length": String(image.bytes.byteLength) } });
-  }
-
-  async #convertImage(source, width) {
-    const res = await this.#fetch(source);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length > MAX_IMAGE_BYTES) throw new Error("image too large");
-    const isGif = String.fromCharCode(...bytes.subarray(0, 4)) === "GIF8";
-    if (isGif && bytes.length <= 200_000) return { bytes, type: "image/gif" };
-    const type = res.headers.get("content-type")?.split(";")[0] || (isGif ? "image/gif" : "image/png");
-    const blob = new Blob([bytes], { type });
-    let drawable;
-    let naturalWidth;
-    let naturalHeight;
-    if (type === "image/svg+xml" || /^\s*<(\?xml|svg)/.test(new TextDecoder().decode(bytes.subarray(0, 200)))) {
-      // createImageBitmap cannot decode SVG; an <img> can.
-      const objectUrl = URL.createObjectURL(new Blob([bytes], { type: "image/svg+xml" }));
-      drawable = new Image();
-      drawable.src = objectUrl;
-      try {
-        await drawable.decode();
-      } finally {
-        URL.revokeObjectURL(objectUrl);
-      }
-      naturalWidth = drawable.naturalWidth || 120;
-      naturalHeight = drawable.naturalHeight || 20;
-    } else {
-      drawable = await createImageBitmap(blob);
-      naturalWidth = drawable.width;
-      naturalHeight = drawable.height;
-    }
-    const scale = Math.min(1, width / naturalWidth);
-    const w = Math.max(1, Math.round(naturalWidth * scale));
-    const h = Math.max(1, Math.round(naturalHeight * scale));
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(drawable, 0, 0, w, h);
-    return { bytes: await canvasJpeg(canvas), type: "image/jpeg" };
   }
 }

@@ -27,6 +27,8 @@ const VERTICAL = new Set([0x2502, 0x2503, 0x2506, 0x2507, 0x250a, 0x250b, 0x254e
 function transliterate(ch, code) {
   const mapped = PUNCTUATION.get(ch);
   if (mapped !== undefined) return mapped;
+  // Invisible format characters (zero-width spaces and joiners, bidi marks, invisible operators) show nothing.
+  if (/^\p{Cf}$/u.test(ch)) return "";
   if (HORIZONTAL.has(code)) return "-";
   if (VERTICAL.has(code)) return "|";
   if (code >= 0x2500 && code <= 0x257f) return "+";
@@ -85,6 +87,19 @@ export function formatBytes(n) {
 /** An ISO timestamp as "YYYY-MM-DD". */
 export function formatDate(iso) {
   return iso.slice(0, 10);
+}
+
+/** Units of an age, largest first, with their length in seconds. */
+const AGE_UNITS = [["year", 365 * 86400], ["month", 30 * 86400], ["day", 86400], ["hour", 3600], ["minute", 60]];
+
+/** `unixSeconds` relative to `nowMs`: "5 minutes ago", "1 day ago"; under a minute is "just now". */
+export function formatAge(unixSeconds, nowMs) {
+  const seconds = Math.floor(nowMs / 1000) - unixSeconds;
+  for (const [unit, length] of AGE_UNITS) {
+    const n = Math.floor(seconds / length);
+    if (n >= 1) return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+  }
+  return "just now";
 }
 
 /** Path segments as a URL path, each percent-encoded. */
