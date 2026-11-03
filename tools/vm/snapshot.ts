@@ -89,6 +89,8 @@ export interface SnapshotInputs {
   powerOnModes: [number, number][];
   /** The power-on mode (one of `powerOnModes`) whose boot also returns the screen it ends on. */
   captureMode: [number, number];
+  /** The build's output directory, holding the files the guest's images are served from. */
+  assetsDir: string;
 }
 
 export interface DiskPreload {
@@ -297,6 +299,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
         options,
         state: state.slice().buffer,
         mode,
+        assetsDir: inputs.assetsDir,
         capture: mode[0] === inputs.captureMode[0] && mode[1] === inputs.captureMode[1],
       }),
     );
