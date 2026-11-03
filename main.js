@@ -118,9 +118,20 @@ function github() {
   return githubSite;
 }
 
+// http://news.ycombinator.com/ is answered from the Hacker News API (guest-hn.js), loaded when
+// Netscape first asks for it.
+let hackerNewsSite;
+function hackerNews() {
+  hackerNewsSite ??= import("./guest-hn.js").then(({ HackerNewsSite }) => new HackerNewsSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
+  return hackerNewsSite;
+}
+
 async function guestHttpFetch(input) {
   const parsed = new URL(typeof input === "string" ? input : input.url);
   const host = parsed.hostname.toLowerCase();
+  if (host === "news.ycombinator.com" || host === "www.news.ycombinator.com") {
+    return (await hackerNews()).handle(parsed);
+  }
   if (host === "github.com" || host === "www.github.com") {
     return (await github()).handle(parsed);
   }

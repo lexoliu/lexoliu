@@ -130,8 +130,12 @@ class Walker {
  * the link and keep its text); `links.image(src, width)` the guest URL of an image.
  */
 export function renderMarkdown(source, links) {
-  const md = new MarkdownIt({ html: true, linkify: true });
-  const doc = new DOMParser().parseFromString(`<body>${md.render(source)}`, "text/html");
+  return renderHtml(new MarkdownIt({ html: true, linkify: true }).render(source), links);
+}
+
+/** HTML -> HTML 3.2, with `links` as for renderMarkdown. The text is parsed into an inert document, nothing in it loads. */
+export function renderHtml(html, links) {
+  const doc = new DOMParser().parseFromString(`<body>${html}`, "text/html");
   return new Walker(links).children(doc.body);
 }
 

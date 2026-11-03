@@ -13,6 +13,7 @@
 import { Highlighter, HIGHLIGHT_MAX_CHARS, plainLines } from "./guest-highlight.js";
 import { ICON_SIZE, canvasJpeg, iconBytes } from "./guest-icons.js";
 import { mailRoute, renderMarkdown } from "./guest-markdown.js";
+import { NotFound, Upstream, htmlResponse, noContent, pager } from "./guest-site.js";
 import { encodePath, formatBytes, formatCount, formatDate, guestText } from "./guest-text.js";
 
 const SITE = "http://github.com";
@@ -50,10 +51,6 @@ class RateLimited extends Error {
   }
 }
 
-class NotFound extends Error {}
-
-class Upstream extends Error {}
-
 const href = (path) => `${SITE}${path}`;
 const realLink = (path) => href(`/_real${path}`);
 
@@ -90,11 +87,11 @@ export class GitHubSite {
       if (response !== undefined) return response;
       // A GitHub page this site has no rendering of.
       this.#openHost(`${REAL}${url.pathname}${url.search}`);
-      return new Response(null, { status: 204, statusText: "No Content" });
+      return noContent();
     } catch (error) {
-      if (error instanceof RateLimited) return this.#html(200, this.#rateLimitPage(url, error));
-      if (error instanceof NotFound) return this.#html(404, this.#chrome({ title: "Not found", real: url.pathname, crumbs: [], body: `<H2>Not found</H2><P>${guestText(error.message)}` }));
-      if (error instanceof Upstream) return this.#html(502, this.#chrome({ title: "GitHub error", real: url.pathname, crumbs: [], body: `<H2>GitHub could not be reached</H2><P>${guestText(error.message)}<P><A HREF="${guestText(url.pathname + url.search)}">Try again</A>` }));
+      if (error instanceof RateLimited) return htmlResponse(200, this.#rateLimitPage(url, error));
+      if (error instanceof NotFound) return htmlResponse(404, this.#chrome({ title: "Not found", real: url.pathname, crumbs: [], body: `<H2>Not found</H2><P>${guestText(error.message)}` }));
+      if (error instanceof Upstream) return htmlResponse(502, this.#chrome({ title: "GitHub error", real: url.pathname, crumbs: [], body: `<H2>GitHub could not be reached</H2><P>${guestText(error.message)}<P><A HREF="${guestText(url.pathname + url.search)}">Try again</A>` }));
       throw error;
     }
   }
@@ -106,7 +103,7 @@ export class GitHubSite {
     if (first === "_img") return this.#image(url);
     if (first === "_real") {
       this.#openHost(`${REAL}${url.pathname.slice("/_real".length)}${url.search}`);
-      return new Response(null, { status: 204, statusText: "No Content" });
+      return noContent();
     }
     if (first === "_go") return this.#go(url);
     if (segments.length === 0) return this.#cached(url, () => this.#startPage());
@@ -114,15 +111,6 @@ export class GitHubSite {
     if (segments.length === 2) return this.#cached(url, () => this.#repoPage(url, owner, repo));
     if ((kind === "tree" || kind === "blob") && segments.length >= 4) return this.#cached(url, () => this.#pathPage(url, owner, repo, kind, segments.slice(3)));
     return undefined;
-  }
-
-  #html(status, html) {
-    const bytes = new TextEncoder().encode(html);
-    return new Response(bytes, {
-      status,
-      statusText: status === 200 ? "OK" : status === 404 ? "Not Found" : "Error",
-      headers: { "Content-Type": "text/html", "Content-Length": String(bytes.byteLength) },
-    });
   }
 
   /** A rendered page is built once per URL for the session. */
@@ -133,7 +121,7 @@ export class GitHubSite {
       html = await render();
       this.#pages.set(key, html);
     }
-    return this.#html(200, html);
+    return htmlResponse(200, html);
   }
 
   // ---------------------------------------------------------------- upstream
@@ -284,16 +272,8 @@ ${body}
   }
 
   #pager(path, query, page, pages, what) {
-    if (pages <= 1) return "";
     const link = (n, label) => `<A HREF="${guestText(`${href(path)}?${new URLSearchParams({ ...query, page: String(n) })}`)}">${label}</A>`;
-    const parts = [
-      page > 1 ? link(1, "&laquo; First") : "&laquo; First",
-      page > 1 ? link(page - 1, "&lt; Previous") : "&lt; Previous",
-      `<B>${what} page ${page} of ${pages}</B>`,
-      page < pages ? link(page + 1, "Next &gt;") : "Next &gt;",
-      page < pages ? link(pages, "Last &raquo;") : "Last &raquo;",
-    ];
-    return `<P><FONT SIZE="-1">[ ${parts.join(" ] [ ")} ]</FONT>`;
+    return pager(link, page, pages, what);
   }
 
   // ---------------------------------------------------------------- pages
@@ -322,9 +302,9 @@ ${items}
     const target = new URL(`${SITE}/${query.replace(/^\/+/, "")}`);
     const segments = target.pathname.split("/").filter(Boolean).map(decodeURIComponent);
     if (segments.length === 0 || segments[0].startsWith("_")) {
-      return this.#html(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>Enter an owner or owner/repository</H2><P><A HREF="${SITE}/">Back</A>` }));
+      return htmlResponse(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>Enter an owner or owner/repository</H2><P><A HREF="${SITE}/">Back</A>` }));
     }
-    return (await this.#route(target, segments)) ?? this.#html(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>No such page</H2><P><A HREF="${SITE}/">Back</A>` }));
+    return (await this.#route(target, segments)) ?? htmlResponse(404, this.#chrome({ title: "Not found", real: "/", crumbs: [], body: `<H2>No such page</H2><P><A HREF="${SITE}/">Back</A>` }));
   }
 
   async #ownerPage(url, owner) {
