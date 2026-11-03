@@ -6,6 +6,7 @@
 // ends once the disks went quiet after Netscape's request.
 import { join } from "node:path";
 import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf } from "../../guest-pages.js";
+import { logReads, newReadLog } from "./reads.ts";
 
 declare const self: Worker;
 
@@ -21,8 +22,6 @@ const QUIET_DEADLINE_MS = 120_000;
 /** Interval at which the run asks the SB16 for samples, standing in for a speaker. */
 const SPEAKER_PULL_MS = 10;
 const HOMEPAGE_HOST = "lexo.cool";
-/** v86's disk buffer cache granularity (src/buffer.js). */
-const BLOCK_SIZE = 256;
 
 export interface ReplayRequest {
   libv86: string;
@@ -53,31 +52,6 @@ export interface ReplayResult {
 }
 
 export type ReplayReply = { ok: true; result: ReplayResult } | { ok: false; error: string };
-
-/** The members of v86's AsyncXHRPartfileBuffer (src/buffer.js) a run uses. */
-interface DiskBuffer {
-  get(offset: number, len: number, fn: (data: Uint8Array) => void, options?: unknown): void;
-  get_from_cache(offset: number, len: number): Uint8Array | undefined;
-}
-
-interface ReadLog {
-  /** `performance.now()` of the latest read. */
-  last: number;
-  blocks: Set<number>;
-  misses: number;
-}
-
-/** Records every read the IDE device makes from `buffer` into `log`. */
-function logReads(buffer: DiskBuffer, log: ReadLog): void {
-  const get = buffer.get;
-  buffer.get = function (offset, len, fn, options) {
-    if (offset % BLOCK_SIZE !== 0 || len % BLOCK_SIZE !== 0) throw new Error(`disk read [${offset}, +${len}) is not block-aligned`);
-    log.last = performance.now();
-    for (let b = offset / BLOCK_SIZE; b < (offset + len) / BLOCK_SIZE; b++) log.blocks.add(b);
-    if (!this.get_from_cache(offset, len)) log.misses++;
-    get.call(this, offset, len, fn, options);
-  };
-}
 
 function deadline(ms: number, what: string): { promise: Promise<never>; clear(): void } {
   let timer: Timer;
@@ -133,10 +107,7 @@ async function replay({ libv86, options, state, mode: [w, h], assetsDir, capture
   try {
     await new Promise<void>((resolve) => emulator.add_listener("emulator-loaded", resolve));
     const { primary } = emulator.v86.cpu.devices.ide;
-    const logs = {
-      hda: { last: performance.now(), blocks: new Set<number>(), misses: 0 },
-      hdb: { last: performance.now(), blocks: new Set<number>(), misses: 0 },
-    };
+    const logs = { hda: newReadLog(), hdb: newReadLog() };
     logReads(primary.master.buffer, logs.hda);
     logReads(primary.slave.buffer, logs.hdb);
 

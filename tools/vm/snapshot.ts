@@ -15,12 +15,19 @@
 //
 // Preload: both disks are v86 on-demand buffers, which serve a read from their 256-byte block
 // cache when every block of it is cached, and the saved state carries each buffer's blocks
-// marked as written. Each round restores the snapshot in a fresh machine as the page does, puts
-// the blocks recorded so far into the disk caches from the disk images, marked to be saved, and
+// marked as written. The preload starts with every block the cold boot read: the guest's own
+// caches (VCACHE, the kernel's profile cache, discardable code and data) hold only what it read
+// or wrote before the snapshot, and when they drop something the boot after it reads that again.
+// Which of those it drops and reads again follows how the guest's threads interleave, which
+// follows how fast the host runs it against the wall clock, so no recorded boot can stand in for
+// every visitor's; the cold boot's reads hold them all. Each round restores the snapshot in a
+// fresh machine as the page does, puts the blocks recorded so far into the disk caches from the
+// disk images, marked to be saved, and
 // saves that state; then it runs the boot from that state once in every mode the page can switch
-// the guest to at power-on (tools/vm/replay.ts), as the page runs it, recording every read. What
-// the boot reads follows the mode (Netscape lays out its window and the homepage for it) and the
-// guest's wall-clock timers, so a round can read blocks the one before did not; those join the
+// the guest to at power-on (tools/vm/replay.ts), as the page runs it, recording every read: those
+// are the blocks the guest reads for the first time after the snapshot. What the boot reads
+// follows the mode (Netscape lays out its window and the homepage for it) and the guest's
+// wall-clock timers, so a round can read blocks the one before did not; those join the
 // preload and the next round runs, and the first round that reads nothing outside the preload
 // in any mode gives the state. No such round within PRELOAD_ROUNDS fails the build. Blocks the
 // guest wrote before the snapshot are in the state already and stay as they are; byte ranges a
@@ -30,6 +37,7 @@
 // the page's speaker asks for samples, so the sound starts whenever the restored machine runs.
 import { availableParallelism } from "node:os";
 import { VGA_MEMORY_SIZE } from "./display.ts";
+import { BLOCK_SIZE, type DiskBuffer as ReadableDiskBuffer, logReads, newReadLog } from "./reads.ts";
 import type { Frame, ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
 
 /** Wall-clock budget from power-on to the snapshot moment (a local boot takes ~12 s). */
@@ -39,8 +47,6 @@ const BOOT_DEADLINE_MS = 300_000;
  * follows wall-clock timers, so each round can read a few blocks the one before did not.
  */
 const PRELOAD_ROUNDS = 6;
-/** v86's disk buffer cache granularity (src/buffer.js). */
-const BLOCK_SIZE = 256;
 
 export interface WavFormat {
   sampleRate: number;
@@ -94,8 +100,10 @@ export interface SnapshotInputs {
 }
 
 export interface DiskPreload {
-  /** Distinct bytes the guest read between the snapshot and Netscape's request. */
+  /** Distinct bytes in the preload: the cold boot's reads, the boot after the snapshot's, and the pins. */
   readBytes: number;
+  /** Distinct bytes the cold boot read before the snapshot. */
+  coldReadBytes: number;
   /** Blocks put into the state; the rest of the read blocks were written before the snapshot. */
   preloadedBlocks: number;
 }
@@ -110,7 +118,7 @@ export interface Snapshot {
 }
 
 /** The members of v86's AsyncXHRPartfileBuffer (src/buffer.js) the preload uses. */
-interface DiskBuffer {
+interface DiskBuffer extends ReadableDiskBuffer {
   byteLength: number;
   block_cache: Map<number, Uint8Array>;
   block_cache_is_write: Set<number>;
@@ -219,8 +227,13 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
   }) as typeof fetch;
 
   let atStartupSound: ArrayBuffer;
+  const coldReads = { hda: newReadLog(), hdb: newReadLog() };
   try {
-    const cold = new V86({ ...options, autostart: true });
+    const cold = new V86({ ...options, autostart: false });
+    await new Promise<void>((resolve) => cold.add_listener("emulator-loaded", resolve));
+    const coldDisks = disks(cold);
+    logReads(coldDisks.hda, coldReads.hda);
+    logReads(coldDisks.hdb, coldReads.hdb);
     let reschgReady = false;
     let coldLine = "";
     cold.add_listener("serial0-output-byte", (byte: number) => {
@@ -256,6 +269,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
           }
         });
       });
+      cold.run();
       await Promise.race([atSound, boot.promise]).finally(boot.clear);
       await cold.stop();
       const { vga } = cold.v86.cpu.devices;
@@ -275,7 +289,10 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
   // earlier run (such as network replies still in flight to its NE2000) reaches the state.
   const pinnedBlocks = (disk: ChunkedDisk) =>
     new Set(disk.pinned.flatMap(([start, end]) => Array.from({ length: (end - start) / BLOCK_SIZE }, (_, k) => start / BLOCK_SIZE + k)));
-  const blocks = { hda: pinnedBlocks(inputs.hda), hdb: pinnedBlocks(inputs.hdb) };
+  const blocks = {
+    hda: pinnedBlocks(inputs.hda).union(coldReads.hda.blocks),
+    hdb: pinnedBlocks(inputs.hdb).union(coldReads.hdb.blocks),
+  };
   // Each boot is a machine of its own on a thread of its own.
   const lanes = availableParallelism();
   for (let round = 1; round <= PRELOAD_ROUNDS; round++) {
@@ -313,6 +330,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     if (missed.length === 0) {
       const report = (name: "hda" | "hdb"): DiskPreload => ({
         readBytes: blocks[name].size * BLOCK_SIZE,
+        coldReadBytes: coldReads[name].blocks.size * BLOCK_SIZE,
         preloadedBlocks: preloaded[name],
       });
       const frame = runs[inputs.powerOnModes.findIndex(([w, h]) => w === inputs.captureMode[0] && h === inputs.captureMode[1])].frame;

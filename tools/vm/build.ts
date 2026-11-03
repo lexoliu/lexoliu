@@ -178,8 +178,10 @@ try {
   }
   console.log(`state (uncompressed)             ${snapshot.state.length} bytes`);
   for (const disk of ["hda", "hdb"] as const) {
-    const { readBytes, preloadedBlocks } = snapshot[disk];
-    console.log(`${disk} boot reads                   ${readBytes} bytes, ${preloadedBlocks} blocks preloaded into the state`);
+    const { readBytes, coldReadBytes, preloadedBlocks } = snapshot[disk];
+    console.log(
+      `${disk} preload                      ${readBytes} bytes (cold boot read ${coldReadBytes}), ${preloadedBlocks} blocks put into the state`,
+    );
   }
 } catch (e) {
   console.error(`vm build failed: ${e instanceof Error ? (e.stack ?? e.message) : e}`);
