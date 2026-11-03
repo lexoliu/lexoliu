@@ -1,5 +1,6 @@
 // Every modification applied to upstream inputs. Each byte patch states the bytes it
 // expects, so a changed input fails the build instead of being patched blindly.
+import { vbempModePatches, vgaBiosModePatches } from "./display.ts";
 
 export interface BytePatch {
   offset: number;
@@ -30,8 +31,8 @@ export const netscapeExePatches: BytePatch[] = [
   { offset: 0x6a621, from: "7417", to: "eb17", why: "ignore a stale NETSCAPE.LCK" },
 ];
 
-/** v86's VGA BIOS as served to the guest. */
-export const vgaBiosPatches: BytePatch[] = [];
+/** v86's VGA BIOS as served to the guest: the added display modes (display.ts). */
+export const vgaBiosPatches: BytePatch[] = vgaBiosModePatches();
 
 /** A file on the C: drive rewritten from its upstream content. */
 export interface FilePatch {
@@ -39,6 +40,9 @@ export interface FilePatch {
   why: string;
   apply(content: Uint8Array): Uint8Array;
 }
+
+/** The Windows display driver, VBE Miniport. */
+export const VBEMP_PATH = "/WINDOWS/SYSTEM/VBEMP.DRV";
 
 const REGEDIT_IMPORT = "C:\\WINDOWS\\REGEDIT.EXE D:\\NETSCAPE.REG";
 
@@ -52,5 +56,10 @@ export const cDrivePatches: FilePatch[] = [
       const sep = text.length === 0 || text.endsWith("\r\n") ? "" : "\r\n";
       return Buffer.from(`${text}${sep}${REGEDIT_IMPORT}\r\n`, "latin1");
     },
+  },
+  {
+    path: VBEMP_PATH,
+    why: "give the display driver the added display modes (display.ts)",
+    apply: (content) => applyBytePatches("VBEMP.DRV", content, vbempModePatches(content)),
   },
 ];

@@ -87,35 +87,49 @@ const DEVMODEA = extern struct {
 };
 
 extern "user32" fn ChangeDisplaySettingsA(lpDevMode: *const DEVMODEA, dwFlags: u32) callconv(.winapi) i32;
+
 extern "user32" fn EnumWindows(lpEnumFunc: *const fn (?*anyopaque, isize) callconv(.winapi) i32, lParam: isize) callconv(.winapi) i32;
 extern "user32" fn GetWindowTextA(hWnd: ?*anyopaque, lpString: [*]u8, nMaxCount: i32) callconv(.winapi) i32;
+extern "user32" fn IsWindowVisible(hWnd: ?*anyopaque) callconv(.winapi) i32;
 extern "user32" fn MoveWindow(hWnd: ?*anyopaque, X: i32, Y: i32, nWidth: i32, nHeight: i32, bRepaint: i32) callconv(.winapi) i32;
 extern "user32" fn ShowWindow(hWnd: ?*anyopaque, nCmdShow: i32) callconv(.winapi) i32;
 extern "user32" fn IsZoomed(hWnd: ?*anyopaque) callconv(.winapi) i32;
 
-fn enumWindowsProc(hwnd: ?*anyopaque, lParam: isize) callconv(.winapi) i32 {
-    var title: [128]u8 = undefined;
-    const len = GetWindowTextA(hwnd, &title, 128);
-    if (len >= 8) {
-        var i: usize = 0;
-        while (i + 4 <= @as(usize, @intCast(len))) : (i += 1) {
-            if (title[i] == 'N' and title[i + 1] == 'e' and title[i + 2] == 't' and title[i + 3] == 's') {
-                const sw: i32 = @intCast((@as(usize, @bitCast(lParam)) >> 16) & 0xFFFF);
-                const sh: i32 = @intCast(@as(usize, @bitCast(lParam)) & 0xFFFF);
-                if (IsZoomed(hwnd) != 0) {
-                    _ = ShowWindow(hwnd, 9); // SW_RESTORE
-                }
-                if (sw < 640) {
-                    _ = MoveWindow(hwnd, 4, 4, sw - 8, sh - 36, 1);
-                } else {
-                    _ = MoveWindow(hwnd, 80, 12, sw - 96, sh - 48, 1);
-                }
-                break;
-            }
-        }
+/// The desktop to fit Netscape to, and whether its window was found.
+const Fit = extern struct { w: i32, h: i32, found: i32 };
+
+const MAIN_WINDOW_TITLE = "Netscape - [";
+
+fn isNetscapeMainWindow(hwnd: ?*anyopaque) bool {
+    var title: [MAIN_WINDOW_TITLE.len + 1]u8 = undefined; // GetWindowTextA writes a NUL
+    const len = GetWindowTextA(hwnd, &title, title.len);
+    return len == MAIN_WINDOW_TITLE.len and std.mem.eql(u8, title[0..MAIN_WINDOW_TITLE.len], MAIN_WINDOW_TITLE);
+}
+
+fn fitWindowProc(hwnd: ?*anyopaque, lParam: isize) callconv(.winapi) i32 {
+    const fit: *Fit = @ptrFromInt(@as(usize, @bitCast(lParam)));
+    if (IsWindowVisible(hwnd) == 0 or !isNetscapeMainWindow(hwnd)) return 1;
+    if (IsZoomed(hwnd) != 0) {
+        _ = ShowWindow(hwnd, 9); // SW_RESTORE
     }
+    if (fit.w < 640) {
+        _ = MoveWindow(hwnd, 4, 4, fit.w - 8, fit.h - 36, 1);
+    } else {
+        _ = MoveWindow(hwnd, 80, 12, fit.w - 96, fit.h - 48, 1);
+    }
+    fit.found = 1;
     return 1;
 }
+
+/// Fits Netscape's main window to the desktop; false when it is not open yet.
+fn fitNetscape(width: u32, height: u32) bool {
+    var fit = Fit{ .w = @intCast(width), .h = @intCast(height), .found = 0 };
+    _ = EnumWindows(&fitWindowProc, @bitCast(@intFromPtr(&fit)));
+    return fit.found != 0;
+}
+
+/// Idle sleeps between looks for a Netscape window opened after a switch.
+const FIT_POLL_SLEEPS = 10;
 
 pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
     // Initialize COM1 (0x3F8) 8N1
@@ -130,6 +144,8 @@ pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
     var pos: usize = 0;
     var curW: u32 = 0;
     var curH: u32 = 0;
+    var idle: u32 = 0;
+    var fitPending = false;
 
     while (true) {
         if ((inb(0x3F8 + 5) & 0x01) != 0) {
@@ -147,7 +163,7 @@ pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
                     while (idx < pos and (buf[idx] >= '0' and buf[idx] <= '9')) : (idx += 1) {
                         nh = nh * 10 + (buf[idx] - '0');
                     }
-                    if (nw >= 360 and nh >= 480 and (nw != curW or nh != curH)) {
+                    if (nw > 0 and nh > 0 and (nw != curW or nh != curH)) {
                         var dm = DEVMODEA{};
                         dm.dmPelsWidth = nw;
                         dm.dmPelsHeight = nh;
@@ -157,8 +173,7 @@ pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
                         if (rc == 0) {
                             curW = nw;
                             curH = nh;
-                            const lparam: isize = @bitCast((@as(usize, nw) << 16) | @as(usize, nh));
-                            _ = EnumWindows(&enumWindowsProc, lparam);
+                            fitPending = !fitNetscape(nw, nh);
                             serialWrite("RESCHG_OK\n");
                         } else {
                             serialWrite("RESCHG_ERR\n");
@@ -171,6 +186,8 @@ pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
                 pos += 1;
             }
         } else {
+            idle += 1;
+            if (fitPending and idle % FIT_POLL_SLEEPS == 0) fitPending = !fitNetscape(curW, curH);
             Sleep(50);
         }
     }

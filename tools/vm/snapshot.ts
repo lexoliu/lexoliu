@@ -13,6 +13,7 @@
 // the page's speaker asks for samples, so the sound starts whenever the restored machine runs.
 import { join } from "node:path";
 import { HDB_SIZE } from "./disk.ts";
+import { VGA_MEMORY_SIZE } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE } from "./hda.ts";
 
 /** Wall-clock budget from power-on to the snapshot moment (a local boot takes ~12 s). */
@@ -52,6 +53,8 @@ export interface SnapshotInputs {
   hdaDir: string;
   hdb: string;
   startupSound: WavFormat;
+  /** The screen size the guest boots to; the snapshot fails at any other. */
+  screen: [number, number];
 }
 
 function deadline(ms: number, what: string): { promise: Promise<never>; clear(): void } {
@@ -90,7 +93,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Ui
   const emulator = new V86({
     wasm_path: inputs.wasm,
     memory_size: 64 * 1024 * 1024,
-    vga_memory_size: 8 * 1024 * 1024,
+    vga_memory_size: VGA_MEMORY_SIZE,
     bios: { url: inputs.seabios },
     vga_bios: { url: inputs.vgabios },
     hda: { url: join(inputs.hdaDir, ".img"), size: DISK_SIZE, async: true, fixed_chunk_size: CHUNK_SIZE, use_parts: true },
@@ -128,6 +131,9 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Ui
     await emulator.stop();
     const { vga } = emulator.v86.cpu.devices;
     console.log(`snapshot: startup sound at ${elapsed()} (screen ${vga.screen_width}x${vga.screen_height})`);
+    if (vga.screen_width !== inputs.screen[0] || vga.screen_height !== inputs.screen[1]) {
+      throw new Error(`snapshot screen is ${vga.screen_width}x${vga.screen_height}, the guest boots to ${inputs.screen.join("x")}`);
+    }
     const state = new Uint8Array(await emulator.save_state());
 
     phase = "verify";

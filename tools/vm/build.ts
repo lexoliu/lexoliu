@@ -1,5 +1,6 @@
 // Generates every VM asset the page loads from /public/vm, from pinned and hash-verified
-// inputs: v86, its BIOSes, the C: chunks (patched), the D: image and the saved state.
+// inputs: v86, its BIOSes (patched), the C: chunks (patched), the D: image, the guest's
+// display modes and the saved state.
 // Usage: bun tools/vm/build.ts [--out DIR] [--cache DIR]
 //   --out    output directory, replaced entirely (default: public/vm)
 //   --cache  verified downloads, reused across runs (default: $XDG_CACHE_HOME/lexoliu-vm)
@@ -7,9 +8,10 @@ import { homedir } from "node:os";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { buildHda, buildHdb, firstPartitionOffset, run } from "./disk.ts";
+import { bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
 import { fetchHdaBase } from "./hda.ts";
 import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
-import { applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
+import { VBEMP_PATH, applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
 import { parseWavFormat, snapshotAtStartupSound } from "./snapshot.ts";
 import { fetchSources } from "./sources.ts";
 
@@ -18,6 +20,7 @@ const ROOT = join(dirname(import.meta.path), "..", "..");
 const STARTUP_SOUND = "/WINDOWS/MEDIA/The Microsoft Sound.wav";
 const STATE_FILE = "win95-netscape.state.bin.zst";
 const STATE_ZSTD_LEVEL = 19;
+const MODES_FILE = "modes.json";
 
 function option(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
@@ -80,7 +83,23 @@ try {
     await cp(join(v86Dir, "libv86.js"), join(out, "libv86.js"));
     await cp(join(v86Dir, "v86.wasm"), join(out, "v86.wasm"));
     await cp(src.seabios, join(out, "seabios.bin"));
-    await Bun.write(join(out, "vgabios.bin"), applyBytePatches("vgabios.bin", await Bun.file(src.vgabios).bytes(), vgaBiosPatches));
+    const vgabios = applyBytePatches("vgabios.bin", await Bun.file(src.vgabios).bytes(), vgaBiosPatches);
+    checkOptionRomChecksum(vgabios);
+    await Bun.write(join(out, "vgabios.bin"), vgabios);
+  });
+
+  const modes = await stage("derive display modes", async () => {
+    const image = join(work, "c.img");
+    const drv = join(work, "vbemp.drv");
+    await run(["mcopy", "-o", "-i", `${image}@@${await firstPartitionOffset(image)}`, `::${VBEMP_PATH}`, drv], {
+      env: { MTOOLS_SKIP_CHECK: "1" },
+    });
+    const boot = bootDisplay(await Bun.file(join(dirname(import.meta.path), "guest", "netscape.reg")).text());
+    const modes = guestModes(await Bun.file(join(out, "vgabios.bin")).bytes(), await Bun.file(drv).bytes(), boot);
+    checkAddedModes(await Bun.file(src.vgabios).bytes(), modes);
+    console.log(`display modes at ${boot.bitsPerPixel} bpp: ${modes.modes.map(([w, h]) => `${w}x${h}`).join(" ")}`);
+    await Bun.write(join(out, MODES_FILE), `${JSON.stringify(modes)}\n`);
+    return modes;
   });
 
   const state = await stage("boot to startup sound", async () => {
@@ -97,6 +116,7 @@ try {
       hdaDir: join(out, "hda"),
       hdb: join(out, "hdb.img"),
       startupSound: parseWavFormat(await Bun.file(wav).bytes()),
+      screen: modes.snapshotMode,
     });
   });
 
@@ -106,7 +126,7 @@ try {
 
   await rm(work, { recursive: true, force: true });
   for (const [name, s] of timings) console.log(`${name.padEnd(24)} ${s.toFixed(1).padStart(7)} s`);
-  for (const f of ["libv86.js", "v86.wasm", "seabios.bin", "vgabios.bin", "hdb.img", STATE_FILE]) {
+  for (const f of ["libv86.js", "v86.wasm", "seabios.bin", "vgabios.bin", "hdb.img", MODES_FILE, STATE_FILE]) {
     console.log(`${f.padEnd(32)} ${Bun.file(join(out, f)).size} bytes`);
   }
   console.log(`state (uncompressed)             ${state.length} bytes`);
