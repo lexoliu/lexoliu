@@ -1,0 +1,29 @@
+# lexo.cool
+
+> Personal site of Lexo Liu, a CS undergraduate studying in the US, from Hangzhou, who has written Rust for 6 years. The site is a Windows 95 virtual machine running Netscape Navigator 3.0 in the browser.
+
+## Viewing the site
+
+- https://lexo.cool/ runs the v86 x86 emulator (WebAssembly) in the page. It needs JavaScript; pressing the power button starts Windows 95 with Netscape on the home page.
+- The machine draws to a canvas: its pages can be seen in a screenshot but not extracted as text.
+- Without JavaScript the page shows a text summary of the home page. That summary is current, not an older version of the site.
+
+## Inside the machine
+
+- Home page (http://lexo.cool/ in Netscape): introduction, projects, about and photo album pages.
+- GitHub reader: http://github.com/OWNER/REPO in Netscape browses any public repository, its README and source files, rendered from GitHub's API.
+- Wikipedia reader: English Wikipedia articles and search, rendered from Wikipedia's API.
+- Hacker News reader: front page, threads and user pages, rendered from the Hacker News API.
+- The desktop and Netscape's bookmarks open WaterUI, the Linux kernel and Rust (rust-lang/rust) in the GitHub reader, Hacker News and Wikipedia. Links to other sites open in the visitor's own browser.
+
+## Projects
+
+- [WaterUI](https://github.com/water-rs/waterui): cross-platform reactive GUI framework in Rust
+- [May](https://github.com/May-Agent/may): agentic runtime and workspace orchestrator
+- [Skyzen](https://github.com/zen-rs/skyzen): fast, type-safe async HTTP framework in Rust
+
+## Contact
+
+- GitHub: [@lexoliu](https://github.com/lexoliu)
+- Twitter: [@is_lexo](https://twitter.com/is_lexo)
+- Email: me@lexo.cool
