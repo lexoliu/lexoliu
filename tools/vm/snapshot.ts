@@ -16,37 +16,27 @@
 // Preload: both disks are v86 on-demand buffers, which serve a read from their 256-byte block
 // cache when every block of it is cached, and the saved state carries each buffer's blocks
 // marked as written. Each round restores the snapshot in a fresh machine as the page does, puts
-// the blocks recorded so far into the disk caches from the disk images, marked to be saved,
-// saves that state, and runs it as the page does (switching the display, Netscape opening
-// lexo.cool and rendering the page's homepage) until the disks go quiet, recording every read.
-// The guest's paging follows its wall-clock timers, so a round can read pages the one before
-// did not; those join the preload and the next round runs, and the first round that reads
-// nothing outside the preload gives the state. No such round within PRELOAD_ROUNDS fails the
-// build. Blocks the guest wrote before the snapshot are in the state already and stay as they
-// are; byte ranges a disk pins (the registry hives) are preloaded whole.
+// the blocks recorded so far into the disk caches from the disk images, marked to be saved, and
+// saves that state; then it runs the boot from that state once in every mode the page can switch
+// the guest to at power-on (tools/vm/replay.ts), as the page runs it, recording every read. What
+// the boot reads follows the mode (Netscape lays out its window and the homepage for it) and the
+// guest's wall-clock timers, so a round can read blocks the one before did not; those join the
+// preload and the next round runs, and the first round that reads nothing outside the preload
+// in any mode gives the state. No such round within PRELOAD_ROUNDS fails the build. Blocks the
+// guest wrote before the snapshot are in the state already and stay as they are; byte ranges a
+// disk pins (the registry hives, the FAT) are preloaded whole.
 //
 // Nothing in the saved state waits on wall-clock time: v86 only moves audio DMA forward when
 // the page's speaker asks for samples, so the sound starts whenever the restored machine runs.
-import { PAGES } from "../../guest-pages.js";
+import { availableParallelism } from "node:os";
 import { VGA_MEMORY_SIZE } from "./display.ts";
+import type { ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
 
 /** Wall-clock budget from power-on to the snapshot moment (a local boot takes ~12 s). */
 const BOOT_DEADLINE_MS = 300_000;
-/** Wall-clock budget from a restored run's start to Netscape's request for http://lexo.cool/. */
-const NETSCAPE_DEADLINE_MS = 300_000;
 /**
- * After Netscape's request, a run ends once no disk was read for this long: Explorer and
- * Netscape keep paging in code and data in the background, as the visitor's machine does.
- */
-const DISK_QUIET_MS = 3_000;
-/** Wall-clock budget from Netscape's request to the quiet disk. */
-const QUIET_DEADLINE_MS = 120_000;
-/** Interval at which the headless run asks the SB16 for samples, standing in for a speaker. */
-const SPEAKER_PULL_MS = 10;
-const HOMEPAGE_HOST = "lexo.cool";
-/**
- * Restored runs recorded into the preload before one must read nothing outside it. The guest's
- * paging follows wall-clock timers, so each run reads a few pages the one before did not.
+ * Rounds recorded into the preload before one must read nothing outside it. The guest's paging
+ * follows wall-clock timers, so each round can read a few blocks the one before did not.
  */
 const PRELOAD_ROUNDS = 6;
 /** v86's disk buffer cache granularity (src/buffer.js). */
@@ -95,11 +85,8 @@ export interface SnapshotInputs {
   startupSound: WavFormat;
   /** The screen size the guest boots to; the snapshot fails at any other. */
   screen: [number, number];
-  /**
-   * Display modes RESCHG.EXE switches the guest to, one after another, in every run after the
-   * snapshot, as the page switches it to fit the viewport; the switch pages in code and data.
-   */
-  modeSwitches: [number, number][];
+  /** Every display mode the page can ask RESCHG.EXE for at power-on; each round runs each. */
+  powerOnModes: [number, number][];
 }
 
 export interface DiskPreload {
@@ -121,39 +108,6 @@ interface DiskBuffer {
   byteLength: number;
   block_cache: Map<number, Uint8Array>;
   block_cache_is_write: Set<number>;
-  get(offset: number, len: number, fn: (data: Uint8Array) => void, options?: unknown): void;
-  get_from_cache(offset: number, len: number): Uint8Array | undefined;
-}
-
-interface ReadLog {
-  /** `performance.now()` of the latest read. */
-  last: number;
-  /** Indices of the blocks read. */
-  blocks: Set<number>;
-  /** Reads the block cache could not serve, as [offset, length]. */
-  misses: [number, number][];
-  stop(): void;
-}
-
-/** Records every read the IDE device makes from `buffer` until `stop`. */
-function logReads(buffer: DiskBuffer): ReadLog {
-  const get = buffer.get;
-  const log: ReadLog = {
-    last: performance.now(),
-    blocks: new Set(),
-    misses: [],
-    stop: () => {
-      buffer.get = get;
-    },
-  };
-  buffer.get = function (offset, len, fn, options) {
-    if (offset % BLOCK_SIZE !== 0 || len % BLOCK_SIZE !== 0) throw new Error(`disk read [${offset}, +${len}) is not block-aligned`);
-    log.last = performance.now();
-    for (let b = offset / BLOCK_SIZE; b < (offset + len) / BLOCK_SIZE; b++) log.blocks.add(b);
-    if (!this.get_from_cache(offset, len)) log.misses.push([offset, len]);
-    get.call(this, offset, len, fn, options);
-  };
-  return log;
 }
 
 /** Puts the `blocks` not already cached into `buffer`'s cache from `image`, marked to be saved. */
@@ -196,31 +150,39 @@ function disks(emulator: any): { hda: DiskBuffer; hdb: DiskBuffer } {
   return { hda: primary.master.buffer, hdb: primary.slave.buffer };
 }
 
+/** Runs the boot after `request.state` in a worker of its own (tools/vm/replay.ts). */
+function replayInWorker(request: ReplayRequest): Promise<ReplayResult> {
+  const worker = new Worker(new URL("./replay.ts", import.meta.url).href);
+  return new Promise<ReplayResult>((resolve, reject) => {
+    worker.onmessage = (event: MessageEvent<ReplayReply>) => {
+      const reply = event.data;
+      if (reply.ok) resolve(reply.result);
+      else reject(new Error(`the boot in ${request.mode.join("x")}: ${reply.error}`));
+    };
+    worker.onerror = (event) => reject(new Error(`the boot in ${request.mode.join("x")}: ${event.message}`));
+    worker.postMessage(request, [request.state]);
+  }).finally(() => worker.terminate());
+}
+
+/** Runs `run` over `items`, at most `bound` at a time, keeping the order of `items`. */
+async function boundedMap<T, R>(items: T[], bound: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await run(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(bound, items.length) }, lane));
+  return results;
+}
+
 /** Boots to the startup sound and returns the state saved there with the boot's reads preloaded. */
 export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Snapshot> {
   const { V86 } = await import(inputs.libv86);
   const t0 = performance.now();
   const elapsed = () => `${((performance.now() - t0) / 1000).toFixed(1)} s`;
-
-  // Guest HTTP goes through the global fetch (network_relay_url "fetch"). Before the snapshot
-  // there must be none; afterwards Netscape gets the homepage the page serves, so it renders,
-  // and reads from disk, what it renders for the visitor.
-  const hostFetch = globalThis.fetch;
-  let phase: "boot" | "verify" = "boot";
-  let failBoot: (e: Error) => void = () => {};
-  let homepageRequested: () => void = () => {};
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    if (phase === "boot") {
-      const e = new Error(`guest requested ${url.href} before the startup sound`);
-      failBoot(e);
-      throw e;
-    }
-    console.log(`snapshot: guest requested ${url.href} at ${elapsed()}`);
-    if (url.hostname !== HOMEPAGE_HOST || url.pathname !== "/") return new Response("not served by the generator", { status: 404 });
-    homepageRequested();
-    return new Response(PAGES["/"], { headers: { "Content-Type": "text/html" } });
-  }) as typeof fetch;
 
   const options = {
     wasm_path: inputs.wasm,
@@ -236,66 +198,20 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     disable_speaker: true,
   };
 
-  /**
-   * Runs the stopped machine through the boot after the snapshot: on until Netscape requests
-   * the homepage and the disks in `reads` then go quiet, switching the display through
-   * `inputs.modeSwitches` as the page does (the first at once, RESCHG.EXE being up in the
-   * state, each next after the answer to the one before); then stops it.
-   */
-  async function runBoot(emulator: any, reads: ReadLog[]): Promise<void> {
-    const switches = [...inputs.modeSwitches];
-    let failSwitch: (e: Error) => void = () => {};
-    const switchFailed = new Promise<never>((_, reject) => (failSwitch = reject));
-    let line = "";
-    const onSerial = (byte: number) => {
-      const c = String.fromCharCode(byte);
-      if (c !== "\n") {
-        line += c;
-        return;
-      }
-      const done = line;
-      line = "";
-      if (done === "RESCHG_ERR") failSwitch(new Error("RESCHG.EXE could not switch the display mode"));
-      if (done === "RESCHG_READY") failSwitch(new Error("RESCHG.EXE started after the snapshot"));
-      if (done === "RESCHG_OK") nextSwitch();
-    };
-    const nextSwitch = () => {
-      if (switches.length === 0) return;
-      const [w, h] = switches.shift()!;
-      emulator.serial0_send(`RES ${w} ${h}\n`);
-    };
-    let dacEnabled = true;
-    const onEnable = () => (dacEnabled = true);
-    const onDisable = () => (dacEnabled = false);
-    emulator.add_listener("serial0-output-byte", onSerial);
-    emulator.add_listener("dac-enable", onEnable);
-    emulator.add_listener("dac-disable", onDisable);
-    const pull = setInterval(() => dacEnabled && emulator.bus.send("dac-request-data"), SPEAKER_PULL_MS);
-    try {
-      const verify = deadline(NETSCAPE_DEADLINE_MS, "Netscape's request for http://lexo.cool/");
-      const homepage = new Promise<void>((resolve) => (homepageRequested = resolve));
-      emulator.run();
-      nextSwitch();
-      await Promise.race([homepage, verify.promise, switchFailed]).finally(verify.clear);
-      const quietBy = performance.now() + QUIET_DEADLINE_MS;
-      while (performance.now() - Math.max(...reads.map((r) => r.last)) < DISK_QUIET_MS) {
-        if (performance.now() > quietBy) throw new Error(`the disks were still read ${QUIET_DEADLINE_MS / 1000} s after Netscape's request`);
-        await Promise.race([Bun.sleep(DISK_QUIET_MS / 10), switchFailed]);
-      }
-    } finally {
-      clearInterval(pull);
-      emulator.remove_listener("serial0-output-byte", onSerial);
-      emulator.remove_listener("dac-enable", onEnable);
-      emulator.remove_listener("dac-disable", onDisable);
-      await emulator.stop();
-    }
-    if (switches.length > 0) throw new Error(`the disks went quiet before the display switched to ${switches.map((m) => m.join("x")).join(", ")}`);
-    console.log(`snapshot: disks quiet at ${elapsed()}`);
-  }
+  // Guest HTTP goes through the global fetch (network_relay_url "fetch"); before the snapshot
+  // there must be none.
+  const hostFetch = globalThis.fetch;
+  let failBoot: (e: Error) => void = () => {};
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const e = new Error(`guest requested ${url} before the startup sound`);
+    failBoot(e);
+    throw e;
+  }) as typeof fetch;
 
+  let atStartupSound: ArrayBuffer;
   try {
     const cold = new V86({ ...options, autostart: true });
-    let atStartupSound: ArrayBuffer;
     let reschgReady = false;
     let coldLine = "";
     cold.add_listener("serial0-output-byte", (byte: number) => {
@@ -342,44 +258,50 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     } finally {
       await cold.destroy();
     }
-    phase = "verify";
-
-    // Each round restores the snapshot in a fresh machine, as the page does, so nothing of an
-    // earlier run (such as network replies still in flight to its NE2000) reaches the state.
-    const pinnedBlocks = (disk: ChunkedDisk) =>
-      new Set(disk.pinned.flatMap(([start, end]) => Array.from({ length: (end - start) / BLOCK_SIZE }, (_, k) => start / BLOCK_SIZE + k)));
-    const blocks = { hda: pinnedBlocks(inputs.hda), hdb: pinnedBlocks(inputs.hdb) };
-    for (let round = 1; round <= PRELOAD_ROUNDS; round++) {
-      const warm = new V86({ ...options, initial_state: { buffer: atStartupSound.slice(0) }, autostart: false });
-      try {
-        await new Promise<void>((resolve) => warm.add_listener("emulator-loaded", resolve));
-        const disk = disks(warm);
-        const preloaded = {
-          hda: await preload(disk.hda, inputs.hda.image, blocks.hda),
-          hdb: await preload(disk.hdb, inputs.hdb.image, blocks.hdb),
-        };
-        const state = new Uint8Array(await warm.save_state());
-        const reads = { hda: logReads(disk.hda), hdb: logReads(disk.hdb) };
-        await runBoot(warm, [reads.hda, reads.hdb]).finally(() => {
-          reads.hda.stop();
-          reads.hdb.stop();
-        });
-        const missed = reads.hda.misses.length + reads.hdb.misses.length;
-        console.log(`snapshot: round ${round}: ${reads.hda.misses.length} C: and ${reads.hdb.misses.length} D: reads outside the preload`);
-        if (missed === 0) {
-          const report = (name: "hda" | "hdb"): DiskPreload => ({
-            readBytes: blocks[name].size * BLOCK_SIZE,
-            preloadedBlocks: preloaded[name],
-          });
-          return { state, hda: report("hda"), hdb: report("hdb") };
-        }
-        for (const name of ["hda", "hdb"] as const) for (const b of reads[name].blocks) blocks[name].add(b);
-      } finally {
-        await warm.destroy();
-      }
-    }
-    throw new Error(`the boot after the startup sound still read outside the preload after ${PRELOAD_ROUNDS} rounds`);
   } finally {
     globalThis.fetch = hostFetch;
   }
+
+  // Each round restores the snapshot in a fresh machine, as the page does, so nothing of an
+  // earlier run (such as network replies still in flight to its NE2000) reaches the state.
+  const pinnedBlocks = (disk: ChunkedDisk) =>
+    new Set(disk.pinned.flatMap(([start, end]) => Array.from({ length: (end - start) / BLOCK_SIZE }, (_, k) => start / BLOCK_SIZE + k)));
+  const blocks = { hda: pinnedBlocks(inputs.hda), hdb: pinnedBlocks(inputs.hdb) };
+  // Each boot is a machine of its own on a thread of its own.
+  const lanes = availableParallelism();
+  for (let round = 1; round <= PRELOAD_ROUNDS; round++) {
+    const warm = new V86({ ...options, initial_state: { buffer: atStartupSound.slice(0) }, autostart: false });
+    let state: Uint8Array;
+    let preloaded: { hda: number; hdb: number };
+    try {
+      await new Promise<void>((resolve) => warm.add_listener("emulator-loaded", resolve));
+      const disk = disks(warm);
+      preloaded = {
+        hda: await preload(disk.hda, inputs.hda.image, blocks.hda),
+        hdb: await preload(disk.hdb, inputs.hdb.image, blocks.hdb),
+      };
+      state = new Uint8Array(await warm.save_state());
+    } finally {
+      await warm.destroy();
+    }
+    const runs = await boundedMap(inputs.powerOnModes, lanes, (mode) =>
+      replayInWorker({ libv86: inputs.libv86, options, state: state.slice().buffer, mode }),
+    );
+    const missed = inputs.powerOnModes
+      .map((mode, i) => [mode, runs[i].misses] as const)
+      .filter(([, m]) => m.hda + m.hdb > 0);
+    console.log(
+      `snapshot: round ${round} at ${elapsed()}: ${missed.length} of ${runs.length} power-on modes read outside the preload` +
+        missed.map(([[w, h], m]) => ` ${w}x${h} (${m.hda} C:, ${m.hdb} D:)`).join(","),
+    );
+    if (missed.length === 0) {
+      const report = (name: "hda" | "hdb"): DiskPreload => ({
+        readBytes: blocks[name].size * BLOCK_SIZE,
+        preloadedBlocks: preloaded[name],
+      });
+      return { state, hda: report("hda"), hdb: report("hdb") };
+    }
+    for (const run of runs) for (const name of ["hda", "hdb"] as const) for (const b of run.reads[name]) blocks[name].add(b);
+  }
+  throw new Error(`the boot after the startup sound still read outside the preload after ${PRELOAD_ROUNDS} rounds`);
 }

@@ -149,6 +149,7 @@
     // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
     // =========================================================================
     import { PAGES, wrapHtml32 } from "/guest-pages.js";
+    import { pickGuestMode } from "/guest-display.js";
 
     // =========================================================================
     // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
@@ -426,8 +427,7 @@
     // =========================================================================
     // 3. Automatic Native Resolution Sync via COM1 -> RESCHG.EXE
     // =========================================================================
-    // Among modes sharing the best aspect ratio, the one nearest the viewport's size, up to the
-    // snapshot's mode.
+    // The guest's mode for the viewport, up to the snapshot mode's pixel count.
     const [snapshotW, snapshotH] = guestDisplay.snapshotMode;
     const MAX_GUEST_PIXELS = snapshotW * snapshotH;
 
@@ -445,18 +445,9 @@
       monitorFrame.style.height = `min(100vh, calc(100vw * ${h} / ${w}))`;
     });
 
-    function pickGuestMode(modes, vw, vh) {
-      const misfit = ([w, h]) => Math.abs(Math.log(w / h / (vw / vh)));
-      const best = Math.min(...modes.map(misfit));
-      const fitting = modes.filter((m) => misfit(m) - best < 1e-9);
-      const target = Math.min(vw * vh, MAX_GUEST_PIXELS);
-      const sizeMisfit = ([w, h]) => Math.abs(Math.log((w * h) / target));
-      return fitting.reduce((a, b) => (sizeMisfit(b) < sizeMisfit(a) ? b : a));
-    }
-
     function syncGuestResolution() {
       if (!powered) return;
-      const [w, h] = pickGuestMode(guestDisplay.modes, window.innerWidth, window.innerHeight);
+      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.innerWidth, window.innerHeight);
       if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
       requestedMode = [w, h];
       emulator.serial0_send(`RES ${w} ${h}\n`);
