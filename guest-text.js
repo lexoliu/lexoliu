@@ -6,7 +6,34 @@ export const REPLACEMENT = "?";
 /** Columns between tab stops in source files. */
 export const TAB_WIDTH = 4;
 
-/** Escapes `text` for HTML 3.2 content or a double-quoted attribute; code points the guest cannot show become REPLACEMENT. */
+// Punctuation outside Latin-1 and its nearest faithful spelling. Anything else outside Latin-1 stays REPLACEMENT.
+const PUNCTUATION = new Map([
+  ["‐", "-"], ["‑", "-"], ["‒", "-"], ["–", "-"], ["—", "--"], ["―", "--"], ["−", "-"],
+  ["‘", "'"], ["’", "'"], ["‚", ","], ["‛", "'"], ["“", '"'], ["”", '"'], ["„", '"'], ["‟", '"'],
+  ["′", "'"], ["″", '"'], ["‹", "<"], ["›", ">"],
+  ["•", "*"], ["‣", ">"], ["⁃", "-"], ["…", "..."], ["⁄", "/"], ["™", "(TM)"],
+  ["←", "<-"], ["→", "->"], ["↔", "<->"], ["⇐", "<="], ["⇒", "=>"], ["⇔", "<=>"],
+  ["↑", "^"], ["↓", "v"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "~"],
+  ["✓", "v"], ["✕", "x"], ["✗", "x"],
+  ["╴", "-"], ["╵", "|"], ["╶", "-"], ["╷", "|"], ["╸", "-"], ["╹", "|"], ["╺", "-"], ["╻", "|"],
+  ["╱", "/"], ["╲", "\\"], ["╳", "X"],
+]);
+
+/** Box-drawing code points that are straight horizontal or vertical lines (light, heavy, dashed, double); every other one is a junction. */
+const HORIZONTAL = new Set([0x2500, 0x2501, 0x2504, 0x2505, 0x2508, 0x2509, 0x254c, 0x254d, 0x2550]);
+const VERTICAL = new Set([0x2502, 0x2503, 0x2506, 0x2507, 0x250a, 0x250b, 0x254e, 0x254f, 0x2551]);
+
+/** The Latin-1-safe spelling of a code point outside Latin-1, or REPLACEMENT. */
+function transliterate(ch, code) {
+  const mapped = PUNCTUATION.get(ch);
+  if (mapped !== undefined) return mapped;
+  if (HORIZONTAL.has(code)) return "-";
+  if (VERTICAL.has(code)) return "|";
+  if (code >= 0x2500 && code <= 0x257f) return "+";
+  return REPLACEMENT;
+}
+
+/** Escapes `text` for HTML 3.2 content or a double-quoted attribute; punctuation outside Latin-1 becomes its ASCII spelling (which can change the width) and other code points the guest cannot show become REPLACEMENT. */
 export function guestText(text) {
   let out = "";
   for (const ch of text) {
@@ -17,6 +44,7 @@ export function guestText(text) {
     else if (ch === '"') out += "&quot;";
     else if (code === 9 || code === 10 || code === 13 || (code >= 32 && code < 127)) out += ch;
     else if (code >= 160 && code <= 255) out += `&#${code};`;
+    else if (code > 255) out += guestText(transliterate(ch, code));
     else out += REPLACEMENT;
   }
   return out;
