@@ -1,7 +1,7 @@
 // Disk image construction: external tools, MBR parsing, FAT access through mtools.
 import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { CHUNK_SIZE, DISK_SIZE, chunkNames } from "./hda.ts";
+import { CHUNK_SIZE, DISK_SIZE, chunkNames, partNames } from "./hda.ts";
 import type { FilePatch } from "./patches.ts";
 
 const SECTOR = 512;
@@ -37,12 +37,38 @@ export async function firstPartitionOffset(image: string): Promise<number> {
   return lba * SECTOR;
 }
 
+/**
+ * The byte ranges of the image that hold the file at `path` in the first partition (a FAT12 or
+ * FAT16 file system), from its cluster chain as mtools reports it, whole clusters included.
+ */
+export async function fileExtents(image: string, path: string): Promise<[number, number][]> {
+  const part = await firstPartitionOffset(image);
+  const bpb = new DataView((await Bun.file(image).slice(part, part + SECTOR).bytes()).buffer);
+  const bytesPerSector = bpb.getUint16(11, true);
+  const clusterBytes = bpb.getUint8(13) * bytesPerSector;
+  const reserved = bpb.getUint16(14, true);
+  const fats = bpb.getUint8(16);
+  const rootEntries = bpb.getUint16(17, true);
+  const sectorsPerFat = bpb.getUint16(22, true);
+  if (sectorsPerFat === 0) throw new Error(`${image}: FAT32 is not supported`);
+  const data = part + (reserved + fats * sectorsPerFat) * bytesPerSector + rootEntries * 32;
+  const chain = await mtools("mshowfat", ["-i", `${image}@@${part}`, `::${path}`]);
+  const runs = [...chain.matchAll(/<(\d+)(?:-(\d+))?>/g)];
+  if (runs.length === 0) throw new Error(`mshowfat printed no clusters for ${path}: ${chain}`);
+  return runs.map(([, first, last]) => [
+    data + (Number(first) - 2) * clusterBytes,
+    data + (Number(last ?? first) - 1) * clusterBytes,
+  ]);
+}
+
 // The D: drive geometry: 16 cylinders x 16 heads x 63 sectors, one FAT12 partition
 // starting at the first sector of the second track, as DOS partitions do.
 const HDB_CYLINDERS = 16;
 const HDB_HEADS = 16;
 const HDB_SECTORS = 63;
 export const HDB_SIZE = HDB_CYLINDERS * HDB_HEADS * HDB_SECTORS * SECTOR;
+/** D:'s chunk size; it must divide HDB_SIZE (2^17 * 63). */
+export const HDB_CHUNK_SIZE = 128 * 1024;
 const PARTITION_TYPE_FAT12 = 0x01;
 
 /** Builds the D: disk image holding every entry of `rootDir` at its root. */
@@ -100,9 +126,16 @@ export async function buildHda(baseDir: string, outDir: string, workDir: string,
     console.log(`hda: patched ${patch.path} (${patch.why})`);
   }
 
-  const patched = await Bun.file(image).bytes();
+  await writeParts(image, outDir, CHUNK_SIZE);
+}
+
+/** Cuts `image` into the chunk files v86 loads on demand with `use_parts`. */
+export async function writeParts(image: string, outDir: string, chunkSize: number): Promise<void> {
+  const bytes = await Bun.file(image).bytes();
   await mkdir(outDir, { recursive: true });
   await Promise.all(
-    chunkNames.map((name, k) => Bun.write(join(outDir, name), patched.subarray(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE))),
+    partNames(bytes.length, chunkSize).map((name, k) =>
+      Bun.write(join(outDir, name), bytes.subarray(k * chunkSize, (k + 1) * chunkSize)),
+    ),
   );
 }
