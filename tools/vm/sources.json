@@ -1,15 +1,11 @@
 {
   "v86": {
-    "url": "https://registry.npmjs.org/v86/-/v86-0.5.473.tgz",
-    "sha256": "364ab67a68c1d83646e2ddf7caf73c24574694a132b2b43689ad0f72e7242636"
+    "url": "https://codeload.github.com/copy/v86/tar.gz/315b2b0b758703ef0e6cc7b4088d6068f83f3c20",
+    "sha256": "9b4ad1e6ec8a8392a6a23fdba7355159aa8d9e868860914a8ad5bd20371b032e"
   },
-  "seabios": {
-    "url": "https://raw.githubusercontent.com/copy/v86/b8a39b11dd2076870699e6cac053556271b9bfab/bios/seabios.bin",
-    "sha256": "73e3f359102e3a9982c35fce98eb7cd08f18303ac7f1ba6ebfbe6cdc1c244d98"
-  },
-  "vgabios": {
-    "url": "https://raw.githubusercontent.com/copy/v86/b8a39b11dd2076870699e6cac053556271b9bfab/bios/vgabios.bin",
-    "sha256": "a4bc0d80cc3ca028c73dafa8fee396b8d054ce87ebd8abfbd31b06b437607880"
+  "closure-compiler.jar": {
+    "url": "https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20210601/closure-compiler-v20210601.jar",
+    "sha256": "64f161c65a3dba42c9a4f5a79db335ac0e757fcba486cd7928205ac4c258ef08"
   },
   "netscape": {
     "url": "https://sdfox7.com/netscape/win32/N32E30.EXE",
@@ -38,5 +34,17 @@
   "unshieldv3/config.h.in": {
     "url": "https://raw.githubusercontent.com/wfr/unshieldv3/4e5700fb97ba9f0338b49c1031834ce42177f265/config.h.in",
     "sha256": "220bb0154d1492bb8944948133bc1b8c03cefa3ffb9e33d6cf644d588a34aab7"
+  },
+  "avatar/waterui": {
+    "url": "https://avatars.githubusercontent.com/u/154332053?v=4&s=64",
+    "sha256": "58a9536796f206dbf968df26ea4a681510043065b1258e8890208ea693faac0c"
+  },
+  "avatar/may": {
+    "url": "https://avatars.githubusercontent.com/u/253686797?v=4&s=64",
+    "sha256": "53aecb5eb6550fcbd3afcbb6894648485edf768f033112747ff0b8e6b6159351"
+  },
+  "avatar/skyzen": {
+    "url": "https://avatars.githubusercontent.com/u/214385513?v=4&s=64",
+    "sha256": "5b8ce4bedc778724ac62f2d42c5c495d04f202ed2e1407d4b37a3f3754074bce"
   }
 }

@@ -4,7 +4,8 @@
 // The run asks RESCHG.EXE, listening in the state, for the mode right after it starts, as the
 // page does at power-on; Netscape then opens lexo.cool and renders the page's homepage. The run
 // ends once the disks went quiet after Netscape's request.
-import { PAGES } from "../../guest-pages.js";
+import { join } from "node:path";
+import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf } from "../../guest-pages.js";
 
 declare const self: Worker;
 
@@ -29,6 +30,8 @@ export interface ReplayRequest {
   options: Record<string, unknown>;
   state: ArrayBuffer;
   mode: [number, number];
+  /** Directory holding the generated files GUEST_IMAGES names (the build's output directory). */
+  assetsDir: string;
   /** Returns the guest's screen once the run is over (the homepage rendered). */
   capture: boolean;
 }
@@ -108,7 +111,7 @@ function readFrame(vga: any): Frame {
   return { width, height, rgba };
 }
 
-async function replay({ libv86, options, state, mode: [w, h], capture }: ReplayRequest): Promise<ReplayResult> {
+async function replay({ libv86, options, state, mode: [w, h], assetsDir, capture }: ReplayRequest): Promise<ReplayResult> {
   if (capture) (globalThis as any).ImageData = ImageDataOverBuffer;
   const { V86 } = await import(libv86);
   let homepageRequested: () => void = () => {};
@@ -117,7 +120,11 @@ async function replay({ libv86, options, state, mode: [w, h], capture }: ReplayR
   // homepage the page serves, so it renders, and reads from disk, what it renders for the visitor.
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    if (url.hostname !== HOMEPAGE_HOST || url.pathname !== "/") return new Response("not served by the generator", { status: 404 });
+    if (url.hostname !== HOMEPAGE_HOST) return new Response("not served by the generator", { status: 404 });
+    const image = GUEST_IMAGES[url.pathname as keyof typeof GUEST_IMAGES];
+    if (image !== undefined) return new Response(Bun.file(join(assetsDir, image)), { headers: { "Content-Type": GUEST_IMAGE_TYPE } });
+    if (mailAddressOf(url.pathname) !== undefined) return new Response(null, { status: 204 });
+    if (url.pathname !== "/") return new Response("not served by the generator", { status: 404 });
     homepageRequested();
     return new Response(PAGES["/"], { headers: { "Content-Type": "text/html" } });
   }) as typeof fetch;
