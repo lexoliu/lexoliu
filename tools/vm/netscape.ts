@@ -48,10 +48,11 @@ async function extractInstaller(installer: string, unshield: string, outDir: str
   for (const archive of archives) await run([unshield, "extract", archive, outDir]);
 }
 
-// Installed file -> path inside the extracted installer.
+// Installed file -> path inside the extracted installer, in the archive's own case: it holds both
+// Program\ and program\, which only a case-insensitive file system merges.
 const NETSCAPE_FILES: Record<string, string> = {
-  "PR3230.DLL": "Program/pr3230.dll",
-  "JRT3230.DLL": "Program/jrt3230.dll",
+  "PR3230.DLL": "program/pr3230.dll",
+  "JRT3230.DLL": "program/jrt3230.dll",
   "UNI3200.DLL": "Program/uni3200.dll",
   "NETSCAPE.TLB": "Program/NETSCAPE.TLB",
   "NETSCAPE.HLP": "Program/NETSCAPE.HLP",
