@@ -65,6 +65,9 @@ jobs:
           path: public/vm
           key: ${{ steps.vm-assets.outputs.cache-primary-key }}
 
+      - name: Install site dependencies
+        run: bun install --frozen-lockfile
+
       # Bundles the page and writes the content-hash manifest of every runtime file (tools/site).
       - name: Build site
         run: bun tools/site/build.ts
