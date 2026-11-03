@@ -189,8 +189,8 @@ export const HDB_SIZE = HDB_CYLINDERS * HDB_HEADS * HDB_SECTORS * SECTOR;
 export const HDB_CHUNK_SIZE = 128 * 1024;
 const PARTITION_TYPE_FAT12 = 0x01;
 
-/** Builds the D: disk image holding every entry of `rootDir` at its root. */
-export async function buildHdb(out: string, rootDir: string, label: string): Promise<void> {
+/** Builds the D: disk image holding every entry of `rootDir` at its root, with the volume `label` and `serial`. */
+export async function buildHdb(out: string, rootDir: string, label: string, serial: number): Promise<void> {
   const total = HDB_SIZE / SECTOR;
   const start = HDB_SECTORS;
   const mbr = new Uint8Array(SECTOR);
@@ -214,7 +214,7 @@ export async function buildHdb(out: string, rootDir: string, label: string): Pro
 
   const part = `${out}@@${start * SECTOR}`;
   await mtools("mformat", [
-    "-i", part, "-v", label, "-T", String(total - start),
+    "-i", part, "-v", label, "-N", serial.toString(16), "-T", String(total - start),
     "-h", String(HDB_HEADS), "-s", String(HDB_SECTORS), "-H", String(start), "::",
   ]);
   const fatType = Buffer.from(await Bun.file(out).slice(start * SECTOR + 54, start * SECTOR + 62).bytes()).toString("latin1");
