@@ -114,7 +114,7 @@ function openInHostBrowser(url) {
 // Markdown parser when Netscape first asks for it.
 let githubSite;
 function github() {
-  githubSite ??= import("./guest-github.js").then(({ GitHubSite }) => new GitHubSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
+  githubSite ??= Promise.all([import("./guest-github.js"), highlighter()]).then(([{ GitHubSite }, highlighter]) => new GitHubSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser, highlighter }));
   return githubSite;
 }
 
@@ -122,8 +122,15 @@ function github() {
 // Netscape first asks for it.
 let wikipediaSite;
 function wikipedia() {
-  wikipediaSite ??= import("./guest-wikipedia.js").then(({ WikipediaSite }) => new WikipediaSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
+  wikipediaSite ??= Promise.all([import("./guest-wikipedia.js"), highlighter()]).then(([{ WikipediaSite }, highlighter]) => new WikipediaSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser, highlighter }));
   return wikipediaSite;
+}
+
+// One syntax highlighter for the sites that show code, so Shiki and each grammar load once.
+let sharedHighlighter;
+function highlighter() {
+  sharedHighlighter ??= import("./guest-highlight.js").then(({ Highlighter }) => new Highlighter());
+  return sharedHighlighter;
 }
 
 // http://news.ycombinator.com/ is answered from the Hacker News API (guest-hn.js), loaded when
