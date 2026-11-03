@@ -4,6 +4,37 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)</title>
+  <meta name="description" content="Lexo Liu, a CS undergraduate studying in the US from Hangzhou, a Rustacean for 6 years, working on May, WaterUI and Skyzen." />
+  <link rel="canonical" href="https://lexo.cool/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="lexo.cool" />
+  <meta property="og:title" content="Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)" />
+  <meta property="og:description" content="Lexo Liu, a CS undergraduate studying in the US from Hangzhou, a Rustacean for 6 years, working on May, WaterUI and Skyzen." />
+  <meta property="og:url" content="https://lexo.cool/" />
+  <meta property="og:image" content="https://lexo.cool/public/vm/preview.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Netscape Navigator 3.0 in Windows 95 showing Lexo Liu's home page" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)" />
+  <meta name="twitter:description" content="Lexo Liu, a CS undergraduate studying in the US from Hangzhou, a Rustacean for 6 years, working on May, WaterUI and Skyzen." />
+  <meta name="twitter:image" content="https://lexo.cool/public/vm/preview.png" />
+  <meta name="twitter:site" content="@is_lexo" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "Lexo Liu",
+    "url": "https://lexo.cool/",
+    "email": "mailto:me@lexo.cool",
+    "description": "CS undergraduate studying in the US, from Hangzhou. A Rustacean who has been learning Rust for 6 years.",
+    "sameAs": [
+      "https://github.com/lexoliu",
+      "https://twitter.com/is_lexo"
+    ]
+  }
+  </script>
   <style>
     * {
       box-sizing: border-box;
@@ -25,7 +56,9 @@
     #app {
       position: relative;
       width: 100vw;
+      width: 100dvw;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -37,7 +70,9 @@
     #monitor-frame {
       position: relative;
       width: 100vw;
+      width: 100dvw;
       height: 100vh;
+      height: 100dvh;
       background: #008080;
       overflow: hidden;
     }
@@ -48,6 +83,10 @@
       height: 100%;
       position: relative;
       background: #000;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     #screen_container > div {
@@ -123,17 +162,201 @@
       width: 0;
       background: #e0e0e0;
     }
+
+    /* "click it" doodle pointing at the power button; shown once the button enables. */
+    .power-hint {
+      position: absolute;
+      overflow: visible;
+      pointer-events: none;
+      opacity: 0;
+      color: #e0e0e0;
+    }
+
+    .power-hint path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.5px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .power-hint text {
+      font-family: "Nothing You Could Do", cursive;
+      font-size: 46px;
+      fill: currentColor;
+    }
+
+    /* Landscape: the doodle sits up-left, its arrow tip (the viewBox's bottom-right) at the button's edge. */
+    .power-hint--landscape {
+      right: calc(50% + 28px);
+      bottom: calc(50% + 28px);
+      --hint-w: min(clamp(200px, 24vw, 420px), calc(50vw - 44px), calc((50vh - 44px) * 1.5));
+      width: var(--hint-w);
+      aspect-ratio: 3 / 2;
+    }
+
+    /* Portrait: the doodle sits above, its arrow tip (the viewBox's bottom-centre) at the button's top. */
+    .power-hint--portrait {
+      display: none;
+      left: 50%;
+      bottom: calc(50% + 42px);
+      transform: translateX(-50%);
+      --hint-w: min(clamp(200px, 56vw, 360px), calc(100vw - 32px), calc((50vh - 58px) * 0.8));
+      width: var(--hint-w);
+      aspect-ratio: 4 / 5;
+    }
+
+    @media (orientation: portrait) {
+      .power-hint--landscape {
+        display: none;
+      }
+
+      .power-hint--portrait {
+        display: block;
+      }
+    }
+
+    #power-button:not(:disabled) ~ .power-hint {
+      opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      #power-button:not(:disabled) ~ .power-hint text {
+        animation: power-hint-fade 0.5s ease-out both;
+      }
+
+      /* A non-scaling stroke dashes in screen pixels, so each path's --k (its length over the
+         viewBox width) times the rendered width is its on-screen length. The gap outlasts the
+         path, so no dash (or its round cap) shows before the draw starts. */
+      #power-button:not(:disabled) ~ .power-hint path {
+        --dash: calc(var(--hint-w) * var(--k));
+        stroke-dasharray: var(--dash) calc(var(--dash) * 2);
+        animation: power-hint-draw 1.1s cubic-bezier(0.45, 0, 0.3, 1) 0.4s both;
+      }
+
+      #power-button:not(:disabled) ~ .power-hint .power-hint-head {
+        animation-duration: 0.25s;
+        animation-delay: 1.5s;
+      }
+    }
+
+    @keyframes power-hint-fade {
+      from { opacity: 0; }
+    }
+
+    @keyframes power-hint-draw {
+      from { stroke-dashoffset: calc(var(--dash) * 1.05); }
+      to { stroke-dashoffset: 0; }
+    }
+
+    /* Shown once the guest has powered itself off and the browser kept the tab open */
+    #off-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: #000;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      text-align: center;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #off-screen[hidden] {
+      display: none;
+    }
   </style>
+  <noscript>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;700&display=swap');
+
+      /* Without JavaScript the VM page is inert: show the static page instead. */
+      html, body {
+        height: auto;
+        overflow: auto;
+        background: #fff;
+        color: #000;
+        user-select: auto;
+        -webkit-user-select: auto;
+      }
+
+      #app {
+        display: none;
+      }
+
+      #static {
+        padding: calc(7vw + 8px);
+        font-family: 'Martian Mono', monospace;
+      }
+
+      #static, #static * {
+        box-sizing: content-box;
+      }
+
+      #static div {
+        margin-bottom: 50px;
+      }
+
+      #static .heading {
+        font-size: 40px;
+        font-weight: bold;
+      }
+
+      #static p {
+        margin: 1em 0 10px;
+      }
+
+      #static a:link,
+      #static a:active,
+      #static a:visited {
+        color: black;
+        text-decoration: underline;
+      }
+    </style>
+  </noscript>
 </head>
 <body>
+  <noscript>
+    <main id="static">
+      <div class="heading">👋 Hello,I'm Lexo.</div>
+      <div>
+        <p>- I'm a CS undergraduate studying in 🇺🇸, and my hometown is Hangzhou.</p>
+        <p>- I'm working on <a href="https://github.com/May-Agent/may">May</a>, <a href="https://github.com/water-rs/waterui">WaterUI</a>, and <a href="https://github.com/zen-rs/skyzen">Skyzen</a>.</p>
+        <p>- I'm a Rustacean who has been learning Rust for 6 years.</p>
+        <p>- I'm also keen to meet people from different backgrounds , so feel free to drop me a message :) </p>
+      </div>
+      <div>
+        <p>Twitter: <a href="https://twitter.com/is_lexo">@is_lexo</a></p>
+        <p>Github: <a href="https://github.com/lexoliu">@lexoliu</a></p>
+        <p>Email: <a href="mailto:me@lexo.cool">me@lexo.cool</a></p>
+      </div>
+    </main>
+  </noscript>
   <div id="app">
     <div id="monitor-frame">
       <div id="power-screen">
         <button id="power-button" type="button" aria-label="Power on" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
         </button>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&amp;display=swap&amp;text=click%20it" />
+        <svg class="power-hint power-hint--landscape" viewBox="0 0 300 200" aria-hidden="true">
+          <text transform="translate(6 52) rotate(-9)">click it</text>
+          <path style="--k: 1.36" d="M121 75C122 75 123 76 123 76C124 77 125 77 126 78C126 78 127 78 128 79C128 79 129 80 130 80C130 81 131 81 132 81C133 82 133 82 135 83C136 84 138 85 140 85C142 86 144 87 146 88C149 89 152 89 154 90C157 90 160 90 162 90C165 90 168 90 170 89C172 89 174 88 176 87C178 86 179 85 180 83C181 82 181 81 181 79C181 78 181 76 181 75C180 74 180 73 179 71C178 70 177 69 176 68C175 68 174 67 173 66C172 66 171 65 170 65C169 65 167 65 166 66C166 66 165 67 164 67C163 68 163 69 162 70C162 72 162 73 162 75C162 76 162 78 163 80C164 81 164 83 165 85C166 87 168 89 169 91C171 93 172 96 174 97C176 99 178 101 181 103C183 105 185 107 187 108C190 110 192 111 195 112C197 113 200 114 202 115C205 116 207 117 209 117C211 117 214 118 216 118C218 117 219 117 221 117C223 116 224 116 225 115C226 114 227 114 228 113C229 112 229 111 229 110C230 109 230 107 229 106C229 105 229 104 228 103C228 102 227 101 226 101C225 100 224 99 223 99C222 98 221 98 220 98C219 98 218 98 217 98C216 99 215 99 214 100C213 101 213 101 212 103C212 104 211 105 211 106C211 108 211 110 211 111C211 113 212 115 213 117C213 119 214 121 215 123C216 125 218 127 219 129C221 131 223 133 224 135C226 137 228 139 230 140C232 142 234 144 237 145C239 146 241 148 243 149C246 150 248 151 250 151C252 152 254 152 256 153C258 153 260 153 261 153C263 153 265 153 266 152C267 152 268 151 269 151C270 150 271 149 271 148C271 148 272 147 272 146C272 145 272 144 271 143C271 142 271 142 270 141C269 140 269 140 268 139C267 139 266 138 265 138C264 138 263 138 262 138C262 138 261 138 260 139C259 139 258 140 258 141C258 143 257 144 257 146C257 147 257 149 258 151C258 153 259 155 260 157C261 159 262 162 263 164C264 166 266 167 267 169C268 171 270 172 271 174C272 175 273 176 274 177C275 178 276 178 276 179C277 179 278 180 278 180C279 181 280 181 280 182C281 182 281 183 282 184C283 184 283 185 284 185C285 186 285 186 286 186C287 187 287 187 288 188C289 188 289 189 290 189C291 190 291 190 292 191C293 191 294 191 294 192C295 193 295 195 295 195"/>
+          <path class="power-hint-head" style="--k: 0.11" d="M291 178Q294 186 295 195Q287 193 281 189"/>
+        </svg>
+        <svg class="power-hint power-hint--portrait" viewBox="0 0 240 300" aria-hidden="true">
+          <text transform="translate(30 50) rotate(-7)">click it</text>
+          <path style="--k: 1.64" d="M157 80C157 80 157 81 156 82C156 83 156 84 155 84C155 85 155 86 155 87C154 88 154 88 154 89C153 90 153 91 153 92C153 93 152 93 152 95C152 96 152 98 151 100C151 102 151 105 151 107C151 110 152 113 152 115C152 118 153 121 154 123C155 125 156 127 157 129C158 131 159 132 160 133C161 134 163 135 164 135C165 135 166 135 167 135C167 134 168 133 169 132C169 131 170 130 170 129C170 128 170 127 170 125C170 124 170 123 169 121C169 120 168 119 168 118C167 117 166 116 165 115C164 114 163 114 162 114C160 113 159 113 158 113C156 114 155 114 153 115C152 116 150 117 149 118C147 119 146 121 144 122C143 124 141 126 140 128C139 131 138 133 137 136C136 138 135 141 134 144C133 146 133 149 132 152C132 155 132 158 132 160C132 163 132 166 132 168C132 171 132 173 133 175C133 177 134 179 135 181C135 183 136 184 137 186C138 187 139 188 140 189C141 190 142 190 142 190C143 191 144 191 145 190C146 190 147 190 147 189C148 189 148 188 149 187C149 186 149 185 149 184C150 183 150 182 149 181C149 180 149 179 148 178C148 177 147 176 146 175C146 174 145 174 144 173C143 173 142 173 140 173C139 173 138 173 137 174C136 174 134 175 133 176C132 177 130 178 129 180C128 181 127 183 125 185C124 187 123 189 122 191C121 193 121 196 120 198C119 201 119 203 118 206C118 208 118 211 117 214C117 216 117 219 118 221C118 224 118 226 119 228C119 230 120 233 120 234C121 236 122 238 123 240C123 241 124 242 125 243C126 244 127 245 128 246C129 246 130 247 131 247C132 247 133 247 134 247C134 246 135 246 136 245C136 245 137 244 137 243C138 243 138 242 138 241C138 240 138 239 138 239C138 238 138 237 138 237C137 236 137 235 136 235C136 235 135 235 134 235C133 235 132 235 131 236C130 237 128 238 127 239C126 241 125 242 124 244C123 246 122 248 121 250C120 252 119 254 119 256C118 258 118 260 118 261C118 263 118 265 118 266C118 267 118 268 118 269C119 270 119 271 119 272C119 272 119 273 120 274C120 275 120 276 120 277C120 278 120 279 121 280C121 280 121 281 121 282C121 283 121 284 121 285C121 286 121 287 122 288C122 288 122 289 122 290C122 291 122 292 122 293C122 294 120 295 120 295"/>
+          <path class="power-hint-head" style="--k: 0.14" d="M131 282Q127 288 120 295Q117 289 117 280"/>
+        </svg>
         <div id="power-progress"></div>
       </div>
+
+      <div id="off-screen" role="button" tabindex="0" hidden>It's now safe to close this tab.</div>
 
       <!-- v86 Screen Container -->
       <div id="screen_container">
@@ -148,8 +371,8 @@
     // =========================================================================
     // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
     // =========================================================================
-    import { PAGES, wrapHtml32 } from "/guest-pages.js";
-    import { pickGuestMode } from "/guest-display.js";
+    import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf, wrapHtml32 } from "/guest-pages.js";
+    import { guestModeFor } from "/guest-display.js";
 
     // =========================================================================
     // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
@@ -158,8 +381,8 @@
     const powerButton = document.getElementById("power-button");
     const powerProgress = document.getElementById("power-progress");
 
-    // The guest display as the VM generator built it (tools/vm/display.ts): its VRAM size,
-    // the mode in the saved state, and the modes the guest can switch to.
+    // The guest display as the VM generator built it (tools/vm/display.ts): its depth, VRAM
+    // size, the mode in the saved state, and the limits on the sizes it can switch to.
     const guestDisplay = await fetch("/public/vm/modes.json").then(async (res) => {
       if (!res.ok) throw new Error(`modes.json: HTTP ${res.status}`);
       return res.json();
@@ -189,7 +412,7 @@
       // The state also carries every disk block the boot after it reads (tools/vm/snapshot.ts),
       // so pressing power reads no chunk over the network.
       initial_state: {
-        url: "/public/vm/win95-netscape.state.bin.zst?v=5",
+        url: "/public/vm/win95-netscape.state.bin.zst?v=10",
       },
       disable_mouse: true,
       network_relay_url: "fetch",
@@ -222,6 +445,23 @@
       const host = parsed.hostname.toLowerCase();
       if (host === "lexo.cool" || host === "www.lexo.cool") {
         const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
+        const mailAddress = mailAddressOf(parsed.pathname);
+        if (mailAddress !== undefined) {
+          // Netscape stays on its page; the visitor's own mail client gets the address.
+          window.location.assign(`mailto:${mailAddress}`);
+          return new Response(null, { status: 204, statusText: "No Content" });
+        }
+        const image = GUEST_IMAGES[pathKey];
+        if (image !== undefined) {
+          const res = await fetch(`/public/vm/${image}`);
+          if (!res.ok) throw new Error(`${image}: HTTP ${res.status}`);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          return new Response(bytes, {
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": GUEST_IMAGE_TYPE, "Content-Length": String(bytes.byteLength) },
+          });
+        }
         const html = PAGES[pathKey];
         const found = html !== undefined;
         const bytes = new TextEncoder().encode(
@@ -294,8 +534,189 @@
       }
     }
 
-    screenContainer.addEventListener("mousemove", (e) => {
-      // Sync button state from e.buttons bitmask in case mouseup occurred outside window
+    // Touch follows the iPadOS gestures, and only the primary touch counts:
+    //   tap                      left click
+    //   swipe                    scrolls the guest window under the finger (momentum after release)
+    //   long press, lift         right click
+    //   long press, then move    left-button drag from the long-press point
+    // Scrolling goes to RESCHG.EXE over COM1, which finds the scrollable window at the point.
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_SLOP_PX = 8;
+    const SCROLL_LINE_GUEST_PX = 32; // guest pixels Netscape scrolls per line
+    const MOMENTUM_TAU_MS = 325; // velocity decay time constant
+    const MOMENTUM_MIN_GUEST_PX_PER_S = 30;
+    const VELOCITY_WINDOW_MS = 100; // finger samples that define the release velocity
+    let guestSize = null; // [w, h] of the guest screen
+    let touchId = null;
+    // pending: down, undecided; held: long press fired; drag: long press then moved; scroll: swiped
+    let touch = null; // { mode, x, y, timer, samples, accX, accY }
+    let momentum = null; // { frame, x, y, vx, vy, accX, accY, last } guest px and guest px/s
+    let scrollFrame = null; // animation frame flushing the accumulated scroll
+
+    function guestPoint(clientX, clientY) {
+      const rect = screenContainer.getBoundingClientRect();
+      return [
+        Math.round(((clientX - rect.left) / rect.width) * guestSize[0]),
+        Math.round(((clientY - rect.top) / rect.height) * guestSize[1]),
+      ];
+    }
+
+    function guestPerClientPx() {
+      return guestSize[0] / screenContainer.getBoundingClientRect().width;
+    }
+
+    function clickAt(clientX, clientY, button) {
+      pointerButtons = [false, false, false];
+      sendGuestPointer(clientX, clientY, false);
+      pointerButtons[button] = true;
+      sendGuestPointer(clientX, clientY, true);
+      pointerButtons[button] = false;
+      sendGuestPointer(clientX, clientY, true);
+    }
+
+    // Moves `acc` (guest px, positive scrolls down or right) into whole lines for the command.
+    function sendScroll(command, gx, gy, acc) {
+      const lines = Math.trunc(acc / SCROLL_LINE_GUEST_PX);
+      if (lines !== 0) emulator.serial0_send(`${command} ${gx} ${gy} ${lines}\n`);
+      return acc - lines * SCROLL_LINE_GUEST_PX;
+    }
+
+    function flushScroll() {
+      scrollFrame = null;
+      const [gx, gy] = guestPoint(touch.startX, touch.startY);
+      touch.accY = sendScroll("SCROLL", gx, gy, touch.accY);
+      touch.accX = sendScroll("HSCROLL", gx, gy, touch.accX);
+    }
+
+    function stopMomentum() {
+      if (!momentum) return;
+      cancelAnimationFrame(momentum.frame);
+      momentum = null;
+    }
+
+    function stepMomentum(now) {
+      const m = momentum;
+      const dt = now - m.last;
+      m.last = now;
+      const decay = Math.exp(-dt / MOMENTUM_TAU_MS);
+      m.vx *= decay;
+      m.vy *= decay;
+      if (Math.hypot(m.vx, m.vy) < MOMENTUM_MIN_GUEST_PX_PER_S) {
+        momentum = null;
+        return;
+      }
+      m.accX = sendScroll("HSCROLL", m.x, m.y, m.accX - (m.vx * dt) / 1000);
+      m.accY = sendScroll("SCROLL", m.x, m.y, m.accY - (m.vy * dt) / 1000);
+      m.frame = requestAnimationFrame(stepMomentum);
+    }
+
+    // Starts momentum from the finger's velocity over the last VELOCITY_WINDOW_MS, in guest px/s.
+    function startMomentum(t, now) {
+      const recent = t.samples.filter((s) => now - s.t <= VELOCITY_WINDOW_MS);
+      if (recent.length < 2) return;
+      const first = recent[0];
+      const last = recent[recent.length - 1];
+      const seconds = (last.t - first.t) / 1000;
+      if (seconds <= 0) return;
+      const k = guestPerClientPx();
+      const [x, y] = guestPoint(t.startX, t.startY);
+      momentum = {
+        x,
+        y,
+        vx: ((last.x - first.x) * k) / seconds,
+        vy: ((last.y - first.y) * k) / seconds,
+        accX: t.accX,
+        accY: t.accY,
+        last: now,
+      };
+      momentum.frame = requestAnimationFrame(stepMomentum);
+    }
+
+    function touchDown(e) {
+      stopMomentum();
+      touchId = e.pointerId;
+      screenContainer.setPointerCapture(e.pointerId);
+      // The guest must have the pointer at the finger before a button event reaches it, or it
+      // presses where the pointer was; the time until the tap, long press or drag covers that.
+      sendGuestPointer(e.clientX, e.clientY, false);
+      touch = { mode: "pending", x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, accX: 0, accY: 0, samples: [] };
+      touch.timer = setTimeout(() => {
+        touch.mode = "held";
+      }, LONG_PRESS_MS);
+    }
+
+    function touchMove(e) {
+      const t = touch;
+      const moved = Math.hypot(e.clientX - t.startX, e.clientY - t.startY) > LONG_PRESS_SLOP_PX;
+      if (t.mode === "pending" && moved) {
+        clearTimeout(t.timer);
+        t.mode = "scroll";
+      } else if (t.mode === "held" && moved) {
+        t.mode = "drag";
+        sendGuestPointer(t.startX, t.startY, false);
+        pointerButtons[0] = true;
+        sendGuestPointer(t.startX, t.startY, true);
+      }
+      if (t.mode === "drag") {
+        sendGuestPointer(e.clientX, e.clientY, false);
+      } else if (t.mode === "scroll") {
+        const k = guestPerClientPx();
+        t.accX -= (e.clientX - t.x) * k;
+        t.accY -= (e.clientY - t.y) * k;
+        t.samples.push({ t: e.timeStamp, x: e.clientX, y: e.clientY });
+        scrollFrame ??= requestAnimationFrame(flushScroll);
+      }
+      t.x = e.clientX;
+      t.y = e.clientY;
+    }
+
+    function touchEnd(e) {
+      const t = touch;
+      touchId = null;
+      touch = null;
+      clearTimeout(t.timer);
+      if (scrollFrame !== null) {
+        cancelAnimationFrame(scrollFrame);
+        scrollFrame = null;
+      }
+      if (e.type === "pointercancel") {
+        releaseAllPointerButtons();
+        return;
+      }
+      if (t.mode === "pending") {
+        clickAt(e.clientX, e.clientY, 0);
+      } else if (t.mode === "held") {
+        clickAt(t.startX, t.startY, 2);
+      } else if (t.mode === "drag") {
+        pointerButtons[0] = false;
+        sendGuestPointer(e.clientX, e.clientY, true);
+      } else {
+        t.x = e.clientX;
+        t.y = e.clientY;
+        startMomentum(t, e.timeStamp);
+      }
+    }
+
+    screenContainer.addEventListener("pointerdown", (e) => {
+      window.focus();
+      e.preventDefault();
+      if (e.pointerType === "touch") {
+        if (e.isPrimary) touchDown(e);
+        return;
+      }
+      screenContainer.setPointerCapture(e.pointerId);
+      if (e.button === 0) pointerButtons[0] = true;
+      else if (e.button === 1) pointerButtons[1] = true;
+      else if (e.button === 2) pointerButtons[2] = true;
+      sendGuestPointer(e.clientX, e.clientY, true);
+    });
+
+    screenContainer.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch") {
+        if (e.pointerId === touchId) touchMove(e);
+        return;
+      }
+      // Sync button state from e.buttons bitmask in case the release happened outside the window
       const left = (e.buttons & 1) !== 0;
       const right = (e.buttons & 2) !== 0;
       const middle = (e.buttons & 4) !== 0;
@@ -307,22 +728,23 @@
       sendGuestPointer(e.clientX, e.clientY, changed);
     });
 
-    screenContainer.addEventListener("mousedown", (e) => {
-      if (e.button === 0) pointerButtons[0] = true;
-      else if (e.button === 1) pointerButtons[1] = true;
-      else if (e.button === 2) pointerButtons[2] = true;
-      sendGuestPointer(e.clientX, e.clientY, true);
-      window.focus();
-      e.preventDefault();
-    });
-
-    window.addEventListener("mouseup", (e) => {
-      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : e.button === 2 ? 2 : -1;
-      if (idx !== -1 && pointerButtons[idx]) {
+    function endPointer(e) {
+      if (e.pointerType === "touch") {
+        if (e.pointerId === touchId) touchEnd(e);
+        return;
+      }
+      if (e.type === "pointercancel") {
+        releaseAllPointerButtons();
+        return;
+      }
+      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : 2;
+      if (pointerButtons[idx]) {
         pointerButtons[idx] = false;
         sendGuestPointer(e.clientX, e.clientY, true);
       }
-    });
+    }
+    screenContainer.addEventListener("pointerup", endPointer);
+    screenContainer.addEventListener("pointercancel", endPointer);
 
     window.addEventListener("blur", releaseAllPointerButtons);
     document.addEventListener("visibilitychange", () => {
@@ -331,81 +753,23 @@
 
     screenContainer.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    // The wheel scrolls like a swipe, through RESCHG.EXE at the wheel's point. Sent as mouse
+    // input instead, it reaches VBMOUSE.DRV, which scrolls from inside its mouse interrupt
+    // callback; the USER calls it makes there re-enter whatever program the interrupt stopped,
+    // which then dies with "This program has performed an illegal operation" or hangs Windows.
+    const wheelAcc = { x: 0, y: 0 }; // guest px not yet sent as whole lines
     screenContainer.addEventListener(
       "wheel",
       (e) => {
-        if (!emulator || !emulator.bus) return;
-        const delta = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
-        if (delta !== 0) {
-          emulator.bus.send("mouse-wheel", [delta, 0]);
-        }
         e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    // Mobile Touch Support: Tap to click, 1-finger vertical drag to scroll page
-    let touchState = null;
-    screenContainer.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length === 1) {
-          const t = e.touches[0];
-          touchState = {
-            startX: t.clientX,
-            startY: t.clientY,
-            lastY: t.clientY,
-            moved: false,
-          };
-          sendGuestPointer(t.clientX, t.clientY, false);
-        }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    screenContainer.addEventListener(
-      "touchmove",
-      (e) => {
-        if (e.touches.length === 1 && touchState) {
-          const t = e.touches[0];
-          const dx = t.clientX - touchState.startX;
-          const dy = t.clientY - touchState.startY;
-          if (Math.hypot(dx, dy) > 8) {
-            touchState.moved = true;
-          }
-          sendGuestPointer(t.clientX, t.clientY, false);
-          // Scroll Netscape with Up/Down arrow scancodes when swiping vertically
-          const stepY = t.clientY - touchState.lastY;
-          if (Math.abs(stepY) >= 24) {
-            touchState.lastY = t.clientY;
-            if (stepY < 0) {
-              // Swipe up -> scroll down (Down Arrow E0 50)
-              emulator.keyboard_send_scancodes([0xe0, 0x50, 0xe0, 0xd0]);
-            } else {
-              // Swipe down -> scroll up (Up Arrow E0 48)
-              emulator.keyboard_send_scancodes([0xe0, 0x48, 0xe0, 0xc8]);
-            }
-          }
-        }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    screenContainer.addEventListener(
-      "touchend",
-      (e) => {
-        if (touchState && !touchState.moved) {
-          pointerButtons[0] = true;
-          sendGuestPointer(touchState.startX, touchState.startY, true);
-          setTimeout(() => {
-            pointerButtons[0] = false;
-            sendGuestPointer(touchState.startX, touchState.startY, true);
-          }, 45);
-        }
-        touchState = null;
-        e.preventDefault();
+        if (!powered) return;
+        const guestPx =
+          e.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? guestPerClientPx()
+          : e.deltaMode === WheelEvent.DOM_DELTA_LINE ? SCROLL_LINE_GUEST_PX
+          : guestSize[1];
+        const [gx, gy] = guestPoint(e.clientX, e.clientY);
+        wheelAcc.y = sendScroll("SCROLL", gx, gy, wheelAcc.y + e.deltaY * guestPx);
+        wheelAcc.x = sendScroll("HSCROLL", gx, gy, wheelAcc.x + e.deltaX * guestPx);
       },
       { passive: false }
     );
@@ -427,10 +791,6 @@
     // =========================================================================
     // 3. Automatic Native Resolution Sync via COM1 -> RESCHG.EXE
     // =========================================================================
-    // The guest's mode for the viewport, up to the snapshot mode's pixel count.
-    const [snapshotW, snapshotH] = guestDisplay.snapshotMode;
-    const MAX_GUEST_PIXELS = snapshotW * snapshotH;
-
     const monitorFrame = document.getElementById("monitor-frame");
     let powered = false;
     // RESCHG.EXE listens on COM1 in the saved state: the generator only emits modes.json
@@ -441,13 +801,15 @@
     // The frame always takes the guest screen's own aspect ratio, so pixels stay square.
     emulator.add_listener("screen-set-size", ([w, h, bpp]) => {
       if (bpp === 0) return; // text mode: columns and rows
-      monitorFrame.style.width = `min(100vw, calc(100vh * ${w} / ${h}))`;
-      monitorFrame.style.height = `min(100vh, calc(100vw * ${h} / ${w}))`;
+      guestSize = [w, h];
+      monitorFrame.style.width = `min(100dvw, calc(100dvh * ${w} / ${h}))`;
+      monitorFrame.style.height = `min(100dvh, calc(100dvw * ${h} / ${w}))`;
     });
 
     function syncGuestResolution() {
       if (!powered) return;
-      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.innerWidth, window.innerHeight);
+      // The viewport's own size, up to the snapshot mode's pixel count (guest-display.js).
+      const [w, h] = guestModeFor(guestDisplay, window.visualViewport.width, window.visualViewport.height);
       if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
       requestedMode = [w, h];
       emulator.serial0_send(`RES ${w} ${h}\n`);
@@ -473,6 +835,7 @@
       scheduleResolutionSync.timer = setTimeout(syncGuestResolution, 180);
     }
     window.addEventListener("resize", scheduleResolutionSync);
+    window.visualViewport.addEventListener("resize", scheduleResolutionSync);
 
     emulator.add_listener("emulator-loaded", () => {
       powerProgress.style.width = "100%";
@@ -487,6 +850,24 @@
       emulator.run();
       powered = true;
       syncGuestResolution();
+    });
+
+    // =========================================================================
+    // 4. Power-off: after Start -> Shut Down, WIN.COM asks the BIOS for an APM power-off,
+    //    which halts the CPU with interrupts disabled; v86 reports that as
+    //    "cpu-event-halt". Restart resets the machine and MS-DOS mode returns to a
+    //    prompt, so neither raises it.
+    // =========================================================================
+    const offScreen = document.getElementById("off-screen");
+    emulator.add_listener("cpu-event-halt", async () => {
+      await emulator.stop();
+      window.close();
+      // A tab the page did not open stays open; tell the user instead.
+      offScreen.hidden = false;
+    });
+    offScreen.addEventListener("click", () => location.reload());
+    offScreen.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") location.reload();
     });
   </script>
 </body>

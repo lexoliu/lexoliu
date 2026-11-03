@@ -11,48 +11,6 @@ REGEDIT4
 "Resolution"="1440,900"
 "BitsPerPixel"="16"
 
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\504,1120]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\504,1008]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\504,896]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\768,1152]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\768,1024]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\896,1024]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1024,1024]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1152,1024]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1440,960]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1920,960]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\2560,1080]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1120,504]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\1008,504]
-@=""
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Display\0000\MODES\16\896,504]
-@=""
-
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run]
 "Netscape"="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
 
@@ -92,3 +50,10 @@ REGEDIT4
 
 [HKEY_CLASSES_ROOT\CLSID\{FBF23B42-E3F0-101B-8488-00AA003E56F8}\Shell\Open\Command]
 @="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Internet Explorer\Main]
+"Start Page"="http://lexo.cool/"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\Main]
+"Start Page"="http://lexo.cool/"
+"Default_Page_URL"="http://lexo.cool/"

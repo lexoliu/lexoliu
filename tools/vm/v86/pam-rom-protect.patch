@@ -1,0 +1,650 @@
+diff --git a/Makefile b/Makefile
+index 20717905..f423f61b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -368,7 +368,7 @@ rust-test: $(RUST_FILES)
+ rust-test-intensive:
+ 	QUICKCHECK_TESTS=100000000 make rust-test
+ 
+-api-tests: build/v86-debug.wasm
++api-tests: build/v86-debug.wasm build/rom-shadow.bin
+ 	./tests/api/clean-shutdown.js
+ 	./tests/api/state.js
+ 	./tests/api/reset.js
+@@ -380,6 +380,11 @@ api-tests: build/v86-debug.wasm
+ 	./tests/api/reboot.js
+ 	#./tests/api/reboot-buildroot.js # https://github.com/copy/v86/issues/636
+ 	./tests/api/pic.js
++	./tests/api/rom-shadow.js
++
++build/rom-shadow.bin: tests/api/rom-shadow.asm
++	mkdir -p build
++	nasm -f bin -o $@ $<
+ 
+ all-tests: eslint kvm-unit-test qemutests qemutests-release jitpagingtests api-tests nasmtests nasmtests-force-jit rust-test tests expect-tests
+ 	# Skipping:
+diff --git a/src/cpu.js b/src/cpu.js
+index 61cec324..8b28f5e3 100644
+--- a/src/cpu.js
++++ b/src/cpu.js
+@@ -376,6 +376,7 @@ CPU.prototype.wasm_patch = function()
+     this.write16 = get_import("write16");
+     this.write32 = get_import("write32");
+     this.in_mapped_range = get_import("in_mapped_range");
++    this.set_rom_write_protect = get_import("set_rom_write_protect");
+ 
+     // used by nasmtests
+     this.fpu_load_tag_word = get_import("fpu_load_tag_word");
+@@ -942,6 +943,10 @@ CPU.prototype.reboot_internal = function()
+ 
+     this.fw_value = [];
+ 
++    if(this.devices.pci)
++    {
++        this.devices.pci.reset();
++    }
+     if(this.devices.virtio_9p)
+     {
+         this.devices.virtio_9p.reset();
+diff --git a/src/pci.js b/src/pci.js
+index b3534f98..c2980ada 100644
+--- a/src/pci.js
++++ b/src/pci.js
+@@ -10,6 +10,12 @@ import { CPU } from "./cpu.js";
+ export const PCI_CONFIG_ADDRESS = 0xCF8;
+ export const PCI_CONFIG_DATA = 0xCFC;
+ 
++// i440FX PAM0-PAM6 (programmable attribute map) registers of the host bridge. Each nibble controls
++// a segment of the shadow ram at 0xC0000-0xFFFFF: bit 0 enables reads, bit 1 enables writes.
++// PAM0 bits 4-7 cover 0xF0000-0xFFFFF, PAM1-PAM6 cover 0xC0000-0xEFFFF in 16K segments.
++const PAM_FIRST = 0x59;
++const PAM_LAST = 0x5F;
++
+ /**
+  * @constructor
+  * @param {CPU} cpu
+@@ -162,7 +168,7 @@ export function PCI(cpu)
+     // See [make_bios_writable_intel] in src/fw/shadow.c in seabios for details
+     const PAM0 = 0x10;
+ 
+-    var host_bridge = {
++    var host_bridge = this.host_bridge = {
+         pci_id: 0,
+         pci_space: [
+             // 00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)
+@@ -176,7 +182,8 @@ export function PCI(cpu)
+         pci_bars: [],
+         name: "82441FX PMC",
+     };
+-    this.register_device(host_bridge);
++    this.host_bridge_space8 = new Uint8Array(this.register_device(host_bridge).buffer);
++    this.update_rom_write_protect();
+ 
+     this.isa_bridge = {
+         pci_id: 1 << 3,
+@@ -265,6 +272,53 @@ PCI.prototype.set_state = function(state)
+     this.pci_value.set(state[257]);
+     this.pci_response.set(state[258]);
+     this.pci_status.set(state[259]);
++
++    this.update_rom_write_protect();
++};
++
++/**
++ * Restore the power-on PAM settings (the chipset is reset with the cpu)
++ */
++PCI.prototype.reset = function()
++{
++    this.host_bridge_space8.set(this.host_bridge.pci_space.slice(PAM_FIRST, PAM_LAST + 1), PAM_FIRST);
++    this.update_rom_write_protect();
++};
++
++PCI.prototype.update_rom_write_protect = function()
++{
++    // The bios and option roms live in ram, so disabled reads are not emulated (they would hit the
++    // rom, which has the same contents). Disabled writes are discarded.
++    const pam = this.host_bridge_space8;
++    let mask = 0;
++
++    if(!(pam[PAM_FIRST] & 0x20))
++    {
++        mask |= 0xF000;
++    }
++
++    for(let i = 0; i < PAM_LAST - PAM_FIRST; i++)
++    {
++        const value = pam[PAM_FIRST + 1 + i];
++        if(!(value & 0x02)) mask |= 1 << 2 * i;
++        if(!(value & 0x20)) mask |= 1 << 2 * i + 1;
++    }
++
++    dbg_log("PAM write protect mask=" + h(mask, 4), LOG_PCI);
++    this.cpu.set_rom_write_protect(mask);
++};
++
++/**
++ * @param {number} bdf
++ * @param {number} addr
++ */
++PCI.prototype.after_config_write = function(bdf, addr)
++{
++    // PAM0-PAM6 are within the 8-byte aligned block at 0x58
++    if(bdf === 0 && addr >> 3 === PAM_FIRST >> 3)
++    {
++        this.update_rom_write_protect();
++    }
+ };
+ 
+ PCI.prototype.pci_query = function()
+@@ -341,6 +395,7 @@ PCI.prototype.pci_write8 = function(address, written)
+             " value=" + h(written, 2), LOG_PCI);
+ 
+     space[addr] = written;
++    this.after_config_write(bdf, addr);
+ };
+ 
+ PCI.prototype.pci_write16 = function(address, written)
+@@ -372,6 +427,7 @@ PCI.prototype.pci_write16 = function(address, written)
+             " value=" + h(written, 4), LOG_PCI);
+ 
+     space[addr >>> 1] = written;
++    this.after_config_write(bdf, addr);
+ };
+ 
+ PCI.prototype.pci_write32 = function(address, written)
+@@ -482,6 +538,7 @@ PCI.prototype.pci_write32 = function(address, written)
+         dbg_log("PCI write dev=" + h(bdf >> 3, 2) + " (" + device.name + ") addr=" + h(addr, 4) +
+                 " value=" + h(written >>> 0, 8), LOG_PCI);
+         space[addr >>> 2] = written;
++        this.after_config_write(bdf, addr);
+     }
+ };
+ 
+diff --git a/src/rust/cpu/cpu.rs b/src/rust/cpu/cpu.rs
+index 7b039753..4effe28b 100644
+--- a/src/rust/cpu/cpu.rs
++++ b/src/rust/cpu/cpu.rs
+@@ -1980,7 +1980,7 @@ pub unsafe fn translate_address_write_jit(address: i32, wasm_table_index: u16) -
+     let has_code = entry & TLB_HAS_CODE != 0;
+     let phys_addr = (entry & !0xFFF ^ address) as u32 - memory::mem8 as u32;
+     let page = Page::page_of(phys_addr);
+-    if !has_code {
++    if !has_code || memory::in_write_protected_rom(phys_addr) {
+         return Ok(phys_addr);
+     }
+     let is_smc = jit::jit_page_has_wasm_table_index(page, wasm_table_index);
+@@ -2306,8 +2306,11 @@ pub unsafe fn do_page_walk(
+         // address part)
+         true
+     };
++    // Writes to write-protected shadow rom are discarded in the write slow paths, so such pages
++    // never get a writable tlb entry. Reads and fetches still use the fast path.
++    let writable = for_writing && !memory::in_write_protected_rom(high);
+     let info_bits = TLB_VALID
+-        | if for_writing { 0 } else { TLB_READONLY }
++        | if writable { 0 } else { TLB_READONLY }
+         | if allow_user { 0 } else { TLB_NO_USER }
+         | if is_in_mapped_range { TLB_IN_MAPPED_RANGE } else { 0 }
+         | if global && 0 != cr4 & CR4_PGE { TLB_GLOBAL } else { 0 }
+@@ -3711,7 +3714,9 @@ pub unsafe fn safe_read_slow_jit(
+ 
+         ((scratch as i32) ^ addr) & !0xFFF
+     }
+-    else if memory::in_mapped_range(addr_low) {
++    else if memory::in_mapped_range(addr_low)
++        || is_write && memory::in_write_protected_rom(addr_low)
++    {
+         let scratch = &raw mut jit_paging_scratch_buffer.0[0];
+ 
+         match bitsize {
+@@ -3885,6 +3890,12 @@ pub unsafe fn safe_write_slow_jit(
+         dbg_assert!(scratch & 0xFFF == 0);
+         ((scratch as i32) ^ addr) & !0xFFF
+     }
++    else if memory::in_write_protected_rom(addr_low) {
++        // discarded: return dummy pointer for fast path to write into
++        let scratch = &raw mut jit_paging_scratch_buffer.0 as u32;
++        dbg_assert!(scratch & 0xFFF == 0);
++        ((scratch as i32) ^ addr) & !0xFFF
++    }
+     else {
+         ((addr_low as i32 + memory::mem8 as i32) ^ addr) & !0xFFF
+     }
+@@ -3943,6 +3954,9 @@ pub unsafe fn safe_write8(addr: i32, value: i32) -> OrPageFault<()> {
+     if memory::in_mapped_range(phys_addr) {
+         memory::mmap_write8(phys_addr, value);
+     }
++    else if memory::in_write_protected_rom(phys_addr) {
++        // discarded
++    }
+     else {
+         if !can_skip_dirty_page {
+             jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -3964,6 +3978,9 @@ pub unsafe fn safe_write16(addr: i32, value: i32) -> OrPageFault<()> {
+     else if memory::in_mapped_range(phys_addr) {
+         memory::mmap_write16(phys_addr, value);
+     }
++    else if memory::in_write_protected_rom(phys_addr) {
++        // discarded
++    }
+     else {
+         if !can_skip_dirty_page {
+             jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -3988,6 +4005,9 @@ pub unsafe fn safe_write32(addr: i32, value: i32) -> OrPageFault<()> {
+     else if memory::in_mapped_range(phys_addr) {
+         memory::mmap_write32(phys_addr, value);
+     }
++    else if memory::in_write_protected_rom(phys_addr) {
++        // discarded
++    }
+     else {
+         if !can_skip_dirty_page {
+             jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -4011,6 +4031,9 @@ pub unsafe fn safe_write64(addr: i32, value: u64) -> OrPageFault<()> {
+         if memory::in_mapped_range(phys_addr) {
+             memory::mmap_write64(phys_addr, value);
+         }
++        else if memory::in_write_protected_rom(phys_addr) {
++            // discarded
++        }
+         else {
+             if !can_skip_dirty_page {
+                 jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -4035,6 +4058,9 @@ pub unsafe fn safe_write128(addr: i32, value: reg128) -> OrPageFault<()> {
+         if memory::in_mapped_range(phys_addr) {
+             memory::mmap_write128(phys_addr, value.u64[0], value.u64[1]);
+         }
++        else if memory::in_write_protected_rom(phys_addr) {
++            // discarded
++        }
+         else {
+             if !can_skip_dirty_page {
+                 jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -4058,6 +4084,9 @@ pub unsafe fn safe_read_write8(addr: i32, instruction: &dyn Fn(i32) -> i32) {
+     if memory::in_mapped_range(phys_addr) {
+         memory::mmap_write8(phys_addr, value);
+     }
++    else if memory::in_write_protected_rom(phys_addr) {
++        // discarded
++    }
+     else {
+         if !can_skip_dirty_page {
+             jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -4085,6 +4114,9 @@ pub unsafe fn safe_read_write16(addr: i32, instruction: &dyn Fn(i32) -> i32) {
+         if memory::in_mapped_range(phys_addr) {
+             memory::mmap_write16(phys_addr, value);
+         }
++        else if memory::in_write_protected_rom(phys_addr) {
++            // discarded
++        }
+         else {
+             if !can_skip_dirty_page {
+                 jit::jit_dirty_page(Page::page_of(phys_addr));
+@@ -4113,6 +4145,9 @@ pub unsafe fn safe_read_write32(addr: i32, instruction: &dyn Fn(i32) -> i32) {
+         if memory::in_mapped_range(phys_addr) {
+             memory::mmap_write32(phys_addr, value);
+         }
++        else if memory::in_write_protected_rom(phys_addr) {
++            // discarded
++        }
+         else {
+             if !can_skip_dirty_page {
+                 jit::jit_dirty_page(Page::page_of(phys_addr));
+diff --git a/src/rust/cpu/memory.rs b/src/rust/cpu/memory.rs
+index 49950bbc..50592dcd 100644
+--- a/src/rust/cpu/memory.rs
++++ b/src/rust/cpu/memory.rs
+@@ -14,7 +14,8 @@ mod ext {
+ 
+ use crate::cpu::apic;
+ use crate::cpu::cpu::{
+-    handle_irqs, reg128, APIC_MEM_ADDRESS, APIC_MEM_SIZE, IOAPIC_MEM_ADDRESS, IOAPIC_MEM_SIZE,
++    full_clear_tlb, handle_irqs, reg128, APIC_MEM_ADDRESS, APIC_MEM_SIZE, IOAPIC_MEM_ADDRESS,
++    IOAPIC_MEM_SIZE,
+ };
+ use crate::cpu::global_pointers::memory_size;
+ use crate::cpu::ioapic;
+@@ -76,6 +77,30 @@ pub fn in_mapped_range(addr: u32) -> bool {
+     return addr >= 0xA0000 && addr < 0xC0000 || addr >= unsafe { *memory_size };
+ }
+ 
++/// Bit n set: writes to the 16K block at 0xC0000 + n * 0x4000 are discarded. Set from the i440FX
++/// PAM registers (pci.js); reads always come from RAM, which holds the shadowed ROM contents.
++#[allow(non_upper_case_globals)]
++static mut rom_write_protect: u32 = 0;
++
++pub const ROM_SHADOW_START: u32 = 0xC0000;
++pub const ROM_SHADOW_BLOCK_SHIFT: u32 = 14;
++
++#[no_mangle]
++pub unsafe fn set_rom_write_protect(mask: u32) {
++    dbg_assert!(mask <= 0xFFFF);
++    if rom_write_protect != mask {
++        rom_write_protect = mask;
++        // tlb entries of now write-protected pages may be writable on the fast path
++        full_clear_tlb();
++    }
++}
++
++#[inline(always)]
++pub fn in_write_protected_rom(addr: u32) -> bool {
++    let block = addr.wrapping_sub(ROM_SHADOW_START) >> ROM_SHADOW_BLOCK_SHIFT;
++    block < 16 && unsafe { rom_write_protect } >> block & 1 != 0
++}
++
+ pub const VGA_LFB_ADDRESS: u32 = 0xE0000000;
+ pub fn in_svga_lfb(addr: u32) -> bool {
+     addr >= VGA_LFB_ADDRESS && addr <= unsafe { VGA_LFB_ADDRESS + (vga_memory_size - 1) }
+@@ -190,6 +215,9 @@ pub unsafe fn write8(addr: u32, value: i32) {
+     if in_mapped_range(addr) {
+         mmap_write8(addr, value & 0xFF);
+     }
++    else if in_write_protected_rom(addr) {
++        // discarded
++    }
+     else {
+         jit::jit_dirty_page(Page::page_of(addr));
+         write8_no_mmap_or_dirty_check(addr, value);
+@@ -205,6 +233,9 @@ pub unsafe fn write16(addr: u32, value: i32) {
+     if in_mapped_range(addr) {
+         mmap_write16(addr, value & 0xFFFF);
+     }
++    else if in_write_protected_rom(addr) {
++        // discarded
++    }
+     else {
+         jit::jit_dirty_cache_small(addr, addr + 2);
+         write16_no_mmap_or_dirty_check(addr, value);
+@@ -219,6 +250,9 @@ pub unsafe fn write32(addr: u32, value: i32) {
+     if in_mapped_range(addr) {
+         mmap_write32(addr, value);
+     }
++    else if in_write_protected_rom(addr) {
++        // discarded
++    }
+     else {
+         jit::jit_dirty_cache_small(addr, addr + 4);
+         write32_no_mmap_or_dirty_check(addr, value);
+diff --git a/src/rust/cpu/string.rs b/src/rust/cpu/string.rs
+index e133d0ea..1737ae95 100644
+--- a/src/rust/cpu/string.rs
++++ b/src/rust/cpu/string.rs
+@@ -163,14 +163,18 @@ unsafe fn string_instruction(
+                 let (addr, skip) =
+                     return_on_pagefault!(translate_address_write_and_can_skip_dirty(es + dst));
+                 movs_into_svga_lfb = memory::in_svga_lfb(addr);
+-                rep_fast = rep_fast && (!memory::in_mapped_range(addr) || movs_into_svga_lfb);
++                rep_fast = rep_fast
++                    && (!memory::in_mapped_range(addr) || movs_into_svga_lfb)
++                    && !memory::in_write_protected_rom(addr);
+                 phys_dst = addr;
+                 skip_dirty_page = skip;
+             },
+             Instruction::Stos | Instruction::Ins => {
+                 let (addr, skip) =
+                     return_on_pagefault!(translate_address_write_and_can_skip_dirty(es + dst));
+-                rep_fast = rep_fast && !memory::in_mapped_range(addr);
++                rep_fast = rep_fast
++                    && !memory::in_mapped_range(addr)
++                    && !memory::in_write_protected_rom(addr);
+                 phys_dst = addr;
+                 skip_dirty_page = skip;
+             },
+diff --git a/tests/api/rom-shadow.asm b/tests/api/rom-shadow.asm
+new file mode 100644
+index 00000000..9501ece6
+--- /dev/null
++++ b/tests/api/rom-shadow.asm
+@@ -0,0 +1,147 @@
++; Boot sector checking that the shadow ram at 0xC0000-0xFFFFF is write-protected after SeaBIOS
++; locked it through the i440FX PAM registers, and writable again once PAM enables writes.
++;
++; Each check stores the byte read before and after a write attempt at RESULTS (2 bytes per
++; check), then DONE is set to DONE_MAGIC. tests/api/rom-shadow.js evaluates the results and may
++; set GO to run the checks again (after a state restore).
++
++bits 16
++org 0x7C00
++
++RESULTS equ 0x0600
++DONE equ 0x0700
++DONE_MAGIC equ 0xA5
++GO equ 0x0701
++
++PCI_ADDR equ 0xCF8
++PAM1_PORT equ 0xCFE                     ; byte 2 of dword 0x58: PAM1 (0xC0000-0xC7FFF)
++
++start:
++    cli
++    xor ax, ax
++    mov ds, ax
++    mov ss, ax
++    mov sp, 0x7C00
++    mov es, ax
++    mov byte [DONE], 0
++    mov byte [GO], 0
++    mov di, RESULTS                     ; es:di: next result slot
++    cld
++
++    mov ax, 0xC000
++    mov fs, ax
++    mov ax, 0xF000
++    mov gs, ax
++
++    ; 1: byte store into the vga bios
++    mov al, [fs:0x2000]
++    stosb
++    not al
++    mov [fs:0x2000], al
++    mov al, [fs:0x2000]
++    stosb
++
++    ; 2: dword store into the system bios
++    mov al, [gs:0x0000]
++    stosb
++    mov eax, [gs:0x0000]
++    not eax
++    mov [gs:0x0000], eax
++    mov al, [gs:0x0000]
++    stosb
++
++    ; 3: read-modify-write
++    mov al, [fs:0x2010]
++    stosb
++    xor byte [fs:0x2010], 0xFF
++    mov al, [fs:0x2010]
++    stosb
++
++    ; 4: rep stosw with 32-bit addressing (string fast path)
++    mov al, [fs:0x3000]
++    stosb
++    push es
++    push di
++    mov ax, fs
++    mov es, ax
++    mov edi, 0x3000
++    mov ecx, 0x100
++    mov ax, 0x5A5A
++    a32 rep stosw
++    pop di
++    pop es
++    mov al, [fs:0x3000]
++    stosb
++
++    ; 5: hot loop (compiled by the jit), stores and read-modify-writes
++    mov al, [fs:0x2020]
++    stosb
++    mov dx, 8
++.outer:
++    mov cx, 0xFFFF
++.inner:
++    inc byte [fs:0x2020]
++    mov [fs:0x2021], cl
++    dec cx
++    jnz .inner
++    dec dx
++    jnz .outer
++    mov al, [fs:0x2020]
++    stosb
++
++    ; 6: control: conventional memory is writable
++    mov al, [0x0500]
++    stosb
++    not al
++    mov [0x0500], al
++    mov al, [0x0500]
++    stosb
++
++    ; 7: enable writes to 0xC0000-0xC3FFF through PAM1, write, restore PAM1
++    mov eax, 0x80000058
++    mov dx, PCI_ADDR
++    out dx, eax
++    mov dx, PAM1_PORT
++    in al, dx
++    mov bl, al                          ; original PAM1
++    or al, 0x02
++    out dx, al
++
++    mov al, [fs:0x2030]
++    stosb
++    not al
++    mov [fs:0x2030], al
++    mov al, [fs:0x2030]
++    stosb
++
++    mov al, bl
++    out dx, al
++
++    ; 8: protected again after restoring PAM1
++    mov al, [fs:0x2040]
++    stosb
++    not al
++    mov [fs:0x2040], al
++    mov al, [fs:0x2040]
++    stosb
++
++    ; 9: SeaBIOS leaves the upper memory above the option roms and its own allocations writable
++    push fs
++    mov ax, 0xE000
++    mov fs, ax
++    mov al, [fs:0x0000]
++    stosb
++    not al
++    mov [fs:0x0000], al
++    mov al, [fs:0x0000]
++    stosb
++    pop fs
++
++    mov byte [DONE], DONE_MAGIC
++.wait:
++    cmp byte [GO], 0
++    je .wait
++    jmp start
++
++    times 510 - ($ - $$) db 0
++    dw 0xAA55
+diff --git a/tests/api/rom-shadow.js b/tests/api/rom-shadow.js
+new file mode 100755
+index 00000000..9b7bd619
+--- /dev/null
++++ b/tests/api/rom-shadow.js
+@@ -0,0 +1,99 @@
++#!/usr/bin/env node
++
++import url from "node:url";
++import fs from "node:fs";
++import assert from "node:assert/strict";
++
++const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
++
++const TEST_RELEASE_BUILD = +process.env.TEST_RELEASE_BUILD;
++const { V86 } = await import(TEST_RELEASE_BUILD ? "../../build/libv86.mjs" : "../../src/main.js");
++
++process.on("unhandledRejection", exn => { throw exn; });
++
++const boot_sector_path = __dirname + "/../../build/rom-shadow.bin";
++if(!fs.existsSync(boot_sector_path))
++{
++    throw new Error("Missing " + boot_sector_path + ", build it with: make build/rom-shadow.bin");
++}
++
++// See rom-shadow.asm
++const RESULTS = 0x600;
++const DONE = 0x700;
++const DONE_MAGIC = 0xA5;
++const GO = 0x701;
++const CHECKS = [
++    { name: "byte store to 0xC2000", writable: false },
++    { name: "dword store to 0xF0000", writable: false },
++    { name: "read-modify-write of 0xC2010", writable: false },
++    { name: "rep stosw to 0xC3000", writable: false },
++    { name: "hot loop on 0xC2020", writable: false },
++    { name: "store to conventional memory", writable: true },
++    { name: "store to 0xC2030 with PAM1 write enabled", writable: true },
++    { name: "store to 0xC2040 after restoring PAM1", writable: false },
++    { name: "store to 0xE0000 (not locked by SeaBIOS)", writable: true },
++];
++
++const floppy = new Uint8Array(1440 * 1024);
++floppy.set(fs.readFileSync(boot_sector_path));
++
++const config = {
++    bios: { url: __dirname + "/../../bios/seabios.bin" },
++    vga_bios: { url: __dirname + "/../../bios/vgabios.bin" },
++    fda: { buffer: floppy.buffer },
++    autostart: true,
++    memory_size: 32 * 1024 * 1024,
++    log_level: 0,
++    disable_jit: +process.env.DISABLE_JIT,
++};
++
++const timeout = setTimeout(() => {
++    throw new Error("Timeout");
++}, 120 * 1000);
++
++async function wait_for_checks(emulator, label)
++{
++    while(emulator.read_memory(DONE, 1)[0] !== DONE_MAGIC)
++    {
++        await new Promise(resolve => setTimeout(resolve, 100));
++    }
++
++    const results = emulator.read_memory(RESULTS, 2 * CHECKS.length);
++    let failed = false;
++
++    for(const [i, check] of CHECKS.entries())
++    {
++        const before = results[2 * i];
++        const after = results[2 * i + 1];
++        const writable = before !== after;
++        const ok = writable === check.writable;
++        failed ||= !ok;
++        console.log("%s %s: %s: %s -> %s (%s)", ok ? "ok  " : "FAIL", label, check.name,
++            before.toString(16), after.toString(16), writable ? "written" : "discarded");
++    }
++
++    assert(!failed, "rom shadow checks failed (" + label + ")");
++}
++
++const emulator = new V86(config);
++await new Promise(resolve => emulator.bus.register("emulator-started", resolve));
++
++await wait_for_checks(emulator, "boot");
++const state = await emulator.save_state();
++
++// the reset restores the power-on PAM settings, SeaBIOS must be able to unlock and lock again
++emulator.write_memory([0], DONE);
++emulator.restart();
++await wait_for_checks(emulator, "reboot");
++emulator.destroy();
++
++// a fresh emulator starts with the power-on PAM settings, restoring must apply the saved ones
++const restored = new V86({ ...config, initial_state: { buffer: state } });
++await new Promise(resolve => restored.bus.register("emulator-started", resolve));
++restored.write_memory([0], DONE);
++restored.write_memory([1], GO);
++await wait_for_checks(restored, "restored state");
++restored.destroy();
++
++clearTimeout(timeout);
++console.log("Test passed");

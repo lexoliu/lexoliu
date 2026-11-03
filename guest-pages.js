@@ -25,7 +25,7 @@ export function wrapHtml32(title, subtitle, bodyContent) {
 <TABLE WIDTH="100%" BORDER="0" CELLPADDING="0" CELLSPACING="0">
 <TR>
 <TD><FONT COLOR="#FFFFFF" SIZE="+1"><B>${subtitle}</B></FONT></TD>
-<TD ALIGN="RIGHT"><FONT COLOR="#FFFF00" SIZE="-1"><B>[Est. 1996 / Rustacean]</B></FONT></TD>
+<TD ALIGN="RIGHT"><FONT COLOR="#FFFF00" SIZE="-1"><B>[Est. 2006 / Rustacean]</B></FONT></TD>
 </TR>
 </TABLE>
 </TD></TR>
@@ -33,13 +33,44 @@ ${NAV_BAR}
 <TR><TD>
 ${bodyContent}
 <P ALIGN="CENTER">
-<FONT SIZE="-2" COLOR="#555555">Best viewed with <B>Netscape Navigator 3.0</B> at 1024x768 &bull; Powered by v86 Windows 95 Virtual Machine</FONT>
+<FONT SIZE="-2" COLOR="#555555">Best viewed with <B>Netscape Navigator 3.0</B> at 1024x768 &middot; Powered by v86 Windows 95 Virtual Machine</FONT>
 </P>
 </TD></TR>
 </TABLE>
 </CENTER>
 </BODY>
 </HTML>`;
+}
+
+/**
+ * The images the pages embed: the guest's path on lexo.cool -> the file under public/vm that
+ * tools/vm/logos.ts generates from the pinned GitHub organisation avatars (Netscape 3.0 decodes
+ * GIF and baseline JPEG, not PNG). The page and the VM generator both serve exactly these.
+ */
+export const GUEST_IMAGES = {
+  "/logos/waterui.jpg": "logos/waterui.jpg",
+  "/logos/may.jpg": "logos/may.jpg",
+  "/logos/skyzen.jpg": "logos/skyzen.jpg",
+};
+export const GUEST_IMAGE_TYPE = "image/jpeg";
+/**
+ * Netscape handles mailto: links itself (its own composer), so email links point at this route
+ * instead: the page opens the visitor's mail client for the address after it, the generator
+ * only answers the request.
+ */
+export const MAIL_ROUTE = "/mail/";
+/** The address a guest request path asks the visitor's mail client for, or undefined. */
+export function mailAddressOf(pathname) {
+  return pathname.startsWith(MAIL_ROUTE) ? decodeURIComponent(pathname.slice(MAIL_ROUTE.length)) : undefined;
+}
+/** Side of the square logos, in pixels. */
+export const LOGO_SIZE = 64;
+
+function projectCard(name, logo, href, description, repo) {
+  return `<TR>
+<TD WIDTH="${LOGO_SIZE + 12}" ALIGN="CENTER" VALIGN="MIDDLE" BGCOLOR="#FFFFFF"><A HREF="${href}"><IMG SRC="http://lexo.cool${logo}" WIDTH="${LOGO_SIZE}" HEIGHT="${LOGO_SIZE}" BORDER="0" ALT="${name} logo"></A></TD>
+<TD WIDTH="100%" VALIGN="MIDDLE"><B><A HREF="${href}">${name}</A></B><BR>${description} (<TT>${repo}</TT>)</TD>
+</TR>`;
 }
 
 export const PAGES = {
@@ -60,15 +91,11 @@ export const PAGES = {
 <I>"I am but a phantom... Random ideas flash through my mind all the time. I jot them down in a blazing beat, resulting in quite a mess. My work involves sifting through this mess to find something valuable. It is what I do."</I>
 </BLOCKQUOTE>
 <HR SIZE="1">
-<TABLE WIDTH="100%" BORDER="1" CELLPADDING="4" CELLSPACING="0" BGCOLOR="#F4F4F4">
-<TR BGCOLOR="#008080">
-<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF" SIZE="-1">Project / Link</FONT></TH>
-<TH ALIGN="LEFT"><FONT COLOR="#FFFFFF" SIZE="-1">Description &amp; URL</FONT></TH>
-</TR>
-<TR><TD><B><A HREF="http://github.com/water-rs/waterui">WaterUI</A></B></TD><TD>Cross-platform reactive GUI framework written in Rust (<TT>github.com/water-rs/waterui</TT>)</TD></TR>
-<TR><TD><B><A HREF="http://github.com/May-Agent/may">May</A></B></TD><TD>Next-generation agentic project (<TT>github.com/May-Agent/may</TT>)</TD></TR>
-<TR><TD><B><A HREF="http://github.com/zen-rs/skyzen">Skyzen</A></B></TD><TD>Ergonomic, fast HTTP framework in Rust (<TT>github.com/zen-rs/skyzen</TT>)</TD></TR>
-<TR><TD><B>Contact</B></TD><TD>Twitter: <A HREF="http://twitter.com/is_lexo">@is_lexo</A> &nbsp;|&nbsp; GitHub: <A HREF="http://github.com/lexoliu">@lexoliu</A> &nbsp;|&nbsp; Email: <A HREF="mailto:me@lexo.cool">me@lexo.cool</A></TD></TR>
+<TABLE WIDTH="100%" BORDER="1" CELLPADDING="6" CELLSPACING="0" BGCOLOR="#F4F4F4">
+${projectCard("WaterUI", "/logos/waterui.jpg", "http://github.com/water-rs/waterui", "Cross-platform reactive GUI framework written in Rust", "github.com/water-rs/waterui")}
+${projectCard("May", "/logos/may.jpg", "http://github.com/May-Agent/may", "Next-generation agentic project", "github.com/May-Agent/may")}
+${projectCard("Skyzen", "/logos/skyzen.jpg", "http://github.com/zen-rs/skyzen", "Ergonomic, fast HTTP framework in Rust", "github.com/zen-rs/skyzen")}
+<TR><TD ALIGN="CENTER"><B>Contact</B></TD><TD WIDTH="100%">Twitter: <A HREF="http://twitter.com/is_lexo">@is_lexo</A> &nbsp;|&nbsp; GitHub: <A HREF="http://github.com/lexoliu">@lexoliu</A> &nbsp;|&nbsp; Email: <A HREF="http://lexo.cool${MAIL_ROUTE}me@lexo.cool">me@lexo.cool</A></TD></TR>
 </TABLE>`
   ),
 
@@ -112,14 +139,7 @@ export const PAGES = {
 <P>I have been writing <B>Rust</B> for over 6 years, focusing on UI toolkits (<B>WaterUI</B>), web/network infrastructure (<B>Skyzen</B>), and developer tooling.
 <BLOCKQUOTE>
 <I>"I am but a phantom... Random ideas flash through my mind all the time. I jot them down in a blazing beat, resulting in quite a mess. My work involves sifting through this mess to find something valuable. It is what I do."</I>
-</BLOCKQUOTE>
-<HR SIZE="1">
-<B>Why a Windows 95 Virtual Machine?</B>
-<UL>
-<LI><B>Real x86 Emulation:</B> This isn't a CSS theme. You are interacting with a real 32-bit Windows 95 OSR2 operating system running inside WebAssembly (<TT>v86</TT>).
-<LI><B>Netscape Navigator 3.0 (1996):</B> Every page you view here is rendered by the authentic 1996 Netscape layout engine over a virtual NE2000 Ethernet card.
-<LI><B>Host-Bridged Networking:</B> HTTP packets leaving Windows 95 are intercepted in browser JavaScript via <TT>FetchNetworkAdapter</TT> and served dynamically.
-</UL>`
+</BLOCKQUOTE>`
   ),
 
   "/photos.html": wrapHtml32(

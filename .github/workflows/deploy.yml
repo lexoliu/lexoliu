@@ -16,18 +16,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The generated VM assets depend only on what the generator reads: its sources, the guest
+      # pages Netscape renders, the display picker, and this workflow's toolchain versions.
+      - name: Restore VM assets
+        id: vm-assets
+        uses: actions/cache/restore@v4
+        with:
+          path: public/vm
+          key: vm-assets-${{ hashFiles('tools/vm/**', 'guest-pages.js', 'guest-display.js', '.github/workflows/deploy.yml') }}
+
       - name: Set up Bun
+        if: steps.vm-assets.outputs.cache-hit != 'true'
         uses: oven-sh/setup-bun@v2
 
       - name: Set up Zig
+        if: steps.vm-assets.outputs.cache-hit != 'true'
         uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
 
+      # v86 is built from source (tools/vm/v86.ts); the runner's clang, Java and Node do the rest.
+      - name: Set up Rust
+        if: steps.vm-assets.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.0
+
       - name: Install mtools
+        if: steps.vm-assets.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools
 
       - name: Restore VM inputs
+        if: steps.vm-assets.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -36,7 +56,15 @@ jobs:
           key: vm-inputs-${{ hashFiles('tools/vm/sources.json', 'tools/vm/hda.sha256') }}
 
       - name: Build VM assets
+        if: steps.vm-assets.outputs.cache-hit != 'true'
         run: bun tools/vm/build.ts
+
+      - name: Save VM assets
+        if: steps.vm-assets.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: public/vm
+          key: ${{ steps.vm-assets.outputs.cache-primary-key }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
