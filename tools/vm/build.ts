@@ -1,7 +1,7 @@
 // Generates every VM asset the page loads from /public/vm, from pinned and hash-verified
 // inputs: v86 (built from source, patched) and its BIOSes (patched), the C: chunks (patched), the D: chunks, the guest's
 // display modes, the saved state, which carries the disk blocks the boot after it reads, and
-// the link-preview image (preview.png), the guest's screen once Netscape rendered the homepage.
+// the project logos (baseline JPEG, for Netscape 3.0), the link-preview image (preview.png), the guest's screen once Netscape rendered the homepage.
 // Usage: bun tools/vm/build.ts [--out DIR] [--cache DIR]
 //   --out    output directory, replaced entirely (default: public/vm)
 //   --cache  verified downloads, reused across runs (default: $XDG_CACHE_HOME/lexoliu-vm)
@@ -13,6 +13,7 @@ import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, fileExtents, firstFatExte
 import { type ModesFile, bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE, fetchHdaBase } from "./hda.ts";
 import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
+import { buildLogos } from "./logos.ts";
 import { previewMode, renderPreview } from "./preview.ts";
 import { VBEMP_PATH, applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
 import { parseWavFormat, snapshotAtStartupSound } from "./snapshot.ts";
@@ -108,6 +109,8 @@ try {
     await Bun.write(join(out, "vgabios.bin"), vgabios);
   });
 
+  await stage("convert logos", () => buildLogos(src, out));
+
   const modes = await stage("derive display modes", async () => {
     const image = join(work, "c.img");
     const drv = join(work, "vbemp.drv");
@@ -153,6 +156,7 @@ try {
       screen: modes.snapshotMode,
       powerOnModes,
       captureMode: previewMode(powerOnModes),
+      assetsDir: out,
     });
   });
 

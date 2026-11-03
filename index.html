@@ -56,7 +56,9 @@
     #app {
       position: relative;
       width: 100vw;
+      width: 100dvw;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -68,7 +70,9 @@
     #monitor-frame {
       position: relative;
       width: 100vw;
+      width: 100dvw;
       height: 100vh;
+      height: 100dvh;
       background: #008080;
       overflow: hidden;
     }
@@ -79,6 +83,10 @@
       height: 100%;
       position: relative;
       background: #000;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
 
     #screen_container > div {
@@ -363,7 +371,7 @@
     // =========================================================================
     // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
     // =========================================================================
-    import { PAGES, wrapHtml32 } from "/guest-pages.js";
+    import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf, wrapHtml32 } from "/guest-pages.js";
     import { pickGuestMode } from "/guest-display.js";
 
     // =========================================================================
@@ -437,6 +445,23 @@
       const host = parsed.hostname.toLowerCase();
       if (host === "lexo.cool" || host === "www.lexo.cool") {
         const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
+        const mailAddress = mailAddressOf(parsed.pathname);
+        if (mailAddress !== undefined) {
+          // Netscape stays on its page; the visitor's own mail client gets the address.
+          window.location.assign(`mailto:${mailAddress}`);
+          return new Response(null, { status: 204, statusText: "No Content" });
+        }
+        const image = GUEST_IMAGES[pathKey];
+        if (image !== undefined) {
+          const res = await fetch(`/public/vm/${image}`);
+          if (!res.ok) throw new Error(`${image}: HTTP ${res.status}`);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          return new Response(bytes, {
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": GUEST_IMAGE_TYPE, "Content-Length": String(bytes.byteLength) },
+          });
+        }
         const html = PAGES[pathKey];
         const found = html !== undefined;
         const bytes = new TextEncoder().encode(
@@ -474,7 +499,7 @@
     let lastClientX = null;
     let lastClientY = null;
 
-    function sendGuestPointer(clientX, clientY, buttonsChanged) {
+    function sendGuestPointer(clientX, clientY, buttonsChanged, touch = false) {
       if (!emulator || !emulator.bus) return;
       const rect = screenContainer.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -492,7 +517,7 @@
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
       emulator.bus.send("mouse-absolute", [x, y, rect.width, rect.height]);
-      if (dx !== 0 || dy !== 0) {
+      if (!touch && (dx !== 0 || dy !== 0)) {
         emulator.bus.send("mouse-delta", [dx, -dy]);
       }
       if (buttonsChanged) {
@@ -509,8 +534,61 @@
       }
     }
 
-    screenContainer.addEventListener("mousemove", (e) => {
-      // Sync button state from e.buttons bitmask in case mouseup occurred outside window
+    // Only the primary touch drives the guest pointer; a long press is a right click.
+    const LONG_PRESS_MS = 500;
+    const LONG_PRESS_SLOP_PX = 8;
+    let touchId = null;
+    let longPress = null; // { x, y, timer } pending, { fired: true } once the right click was sent
+
+    function clearLongPress() {
+      clearTimeout(longPress?.timer);
+      longPress = null;
+    }
+
+    screenContainer.addEventListener("pointerdown", (e) => {
+      window.focus();
+      e.preventDefault();
+      if (e.pointerType === "touch") {
+        if (!e.isPrimary) return;
+        touchId = e.pointerId;
+        screenContainer.setPointerCapture(e.pointerId);
+        sendGuestPointer(e.clientX, e.clientY, false, true);
+        pointerButtons[0] = true;
+        sendGuestPointer(e.clientX, e.clientY, true, true);
+        const { clientX: x, clientY: y } = e;
+        longPress = {
+          x,
+          y,
+          timer: setTimeout(() => {
+            // Replace the held left press with a right click at the same spot.
+            pointerButtons = [false, false, false];
+            sendGuestPointer(x, y, true, true);
+            pointerButtons = [false, false, true];
+            sendGuestPointer(x, y, true, true);
+            pointerButtons = [false, false, false];
+            sendGuestPointer(x, y, true, true);
+            longPress = { fired: true };
+          }, LONG_PRESS_MS),
+        };
+        return;
+      }
+      screenContainer.setPointerCapture(e.pointerId);
+      if (e.button === 0) pointerButtons[0] = true;
+      else if (e.button === 1) pointerButtons[1] = true;
+      else if (e.button === 2) pointerButtons[2] = true;
+      sendGuestPointer(e.clientX, e.clientY, true);
+    });
+
+    screenContainer.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch") {
+        if (e.pointerId !== touchId || longPress?.fired) return;
+        if (longPress && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > LONG_PRESS_SLOP_PX) {
+          clearLongPress();
+        }
+        sendGuestPointer(e.clientX, e.clientY, false, true);
+        return;
+      }
+      // Sync button state from e.buttons bitmask in case the release happened outside the window
       const left = (e.buttons & 1) !== 0;
       const right = (e.buttons & 2) !== 0;
       const middle = (e.buttons & 4) !== 0;
@@ -522,22 +600,30 @@
       sendGuestPointer(e.clientX, e.clientY, changed);
     });
 
-    screenContainer.addEventListener("mousedown", (e) => {
-      if (e.button === 0) pointerButtons[0] = true;
-      else if (e.button === 1) pointerButtons[1] = true;
-      else if (e.button === 2) pointerButtons[2] = true;
-      sendGuestPointer(e.clientX, e.clientY, true);
-      window.focus();
-      e.preventDefault();
-    });
-
-    window.addEventListener("mouseup", (e) => {
-      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : e.button === 2 ? 2 : -1;
-      if (idx !== -1 && pointerButtons[idx]) {
+    function endPointer(e) {
+      if (e.pointerType === "touch") {
+        if (e.pointerId !== touchId) return;
+        touchId = null;
+        const fired = longPress?.fired;
+        clearLongPress();
+        if (!fired) {
+          pointerButtons[0] = false;
+          sendGuestPointer(e.clientX, e.clientY, true, true);
+        }
+        return;
+      }
+      if (e.type === "pointercancel") {
+        releaseAllPointerButtons();
+        return;
+      }
+      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : 2;
+      if (pointerButtons[idx]) {
         pointerButtons[idx] = false;
         sendGuestPointer(e.clientX, e.clientY, true);
       }
-    });
+    }
+    screenContainer.addEventListener("pointerup", endPointer);
+    screenContainer.addEventListener("pointercancel", endPointer);
 
     window.addEventListener("blur", releaseAllPointerButtons);
     document.addEventListener("visibilitychange", () => {
@@ -554,72 +640,6 @@
         if (delta !== 0) {
           emulator.bus.send("mouse-wheel", [delta, 0]);
         }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    // Mobile Touch Support: Tap to click, 1-finger vertical drag to scroll page
-    let touchState = null;
-    screenContainer.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length === 1) {
-          const t = e.touches[0];
-          touchState = {
-            startX: t.clientX,
-            startY: t.clientY,
-            lastY: t.clientY,
-            moved: false,
-          };
-          sendGuestPointer(t.clientX, t.clientY, false);
-        }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    screenContainer.addEventListener(
-      "touchmove",
-      (e) => {
-        if (e.touches.length === 1 && touchState) {
-          const t = e.touches[0];
-          const dx = t.clientX - touchState.startX;
-          const dy = t.clientY - touchState.startY;
-          if (Math.hypot(dx, dy) > 8) {
-            touchState.moved = true;
-          }
-          sendGuestPointer(t.clientX, t.clientY, false);
-          // Scroll Netscape with Up/Down arrow scancodes when swiping vertically
-          const stepY = t.clientY - touchState.lastY;
-          if (Math.abs(stepY) >= 24) {
-            touchState.lastY = t.clientY;
-            if (stepY < 0) {
-              // Swipe up -> scroll down (Down Arrow E0 50)
-              emulator.keyboard_send_scancodes([0xe0, 0x50, 0xe0, 0xd0]);
-            } else {
-              // Swipe down -> scroll up (Up Arrow E0 48)
-              emulator.keyboard_send_scancodes([0xe0, 0x48, 0xe0, 0xc8]);
-            }
-          }
-        }
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    screenContainer.addEventListener(
-      "touchend",
-      (e) => {
-        if (touchState && !touchState.moved) {
-          pointerButtons[0] = true;
-          sendGuestPointer(touchState.startX, touchState.startY, true);
-          setTimeout(() => {
-            pointerButtons[0] = false;
-            sendGuestPointer(touchState.startX, touchState.startY, true);
-          }, 45);
-        }
-        touchState = null;
         e.preventDefault();
       },
       { passive: false }
@@ -656,13 +676,13 @@
     // The frame always takes the guest screen's own aspect ratio, so pixels stay square.
     emulator.add_listener("screen-set-size", ([w, h, bpp]) => {
       if (bpp === 0) return; // text mode: columns and rows
-      monitorFrame.style.width = `min(100vw, calc(100vh * ${w} / ${h}))`;
-      monitorFrame.style.height = `min(100vh, calc(100vw * ${h} / ${w}))`;
+      monitorFrame.style.width = `min(100dvw, calc(100dvh * ${w} / ${h}))`;
+      monitorFrame.style.height = `min(100dvh, calc(100dvw * ${h} / ${w}))`;
     });
 
     function syncGuestResolution() {
       if (!powered) return;
-      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.innerWidth, window.innerHeight);
+      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.visualViewport.width, window.visualViewport.height);
       if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
       requestedMode = [w, h];
       emulator.serial0_send(`RES ${w} ${h}\n`);
@@ -688,6 +708,7 @@
       scheduleResolutionSync.timer = setTimeout(syncGuestResolution, 180);
     }
     window.addEventListener("resize", scheduleResolutionSync);
+    window.visualViewport.addEventListener("resize", scheduleResolutionSync);
 
     emulator.add_listener("emulator-loaded", () => {
       powerProgress.style.width = "100%";

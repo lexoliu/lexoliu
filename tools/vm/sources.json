@@ -34,5 +34,17 @@
   "unshieldv3/config.h.in": {
     "url": "https://raw.githubusercontent.com/wfr/unshieldv3/4e5700fb97ba9f0338b49c1031834ce42177f265/config.h.in",
     "sha256": "220bb0154d1492bb8944948133bc1b8c03cefa3ffb9e33d6cf644d588a34aab7"
+  },
+  "avatar/waterui": {
+    "url": "https://avatars.githubusercontent.com/u/154332053?v=4&s=64",
+    "sha256": "58a9536796f206dbf968df26ea4a681510043065b1258e8890208ea693faac0c"
+  },
+  "avatar/may": {
+    "url": "https://avatars.githubusercontent.com/u/253686797?v=4&s=64",
+    "sha256": "53aecb5eb6550fcbd3afcbb6894648485edf768f033112747ff0b8e6b6159351"
+  },
+  "avatar/skyzen": {
+    "url": "https://avatars.githubusercontent.com/u/214385513?v=4&s=64",
+    "sha256": "5b8ce4bedc778724ac62f2d42c5c495d04f202ed2e1407d4b37a3f3754074bce"
   }
 }
