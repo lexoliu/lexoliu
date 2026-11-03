@@ -29,6 +29,15 @@ export interface ReplayRequest {
   options: Record<string, unknown>;
   state: ArrayBuffer;
   mode: [number, number];
+  /** Returns the guest's screen once the run is over (the homepage rendered). */
+  capture: boolean;
+}
+
+/** The guest's screen, `width` x `height` pixels of RGBA. */
+export interface Frame {
+  width: number;
+  height: number;
+  rgba: Uint8Array;
 }
 
 export interface ReplayResult {
@@ -36,6 +45,8 @@ export interface ReplayResult {
   reads: { hda: number[]; hdb: number[] };
   /** Reads the state's block caches could not serve, per disk. */
   misses: { hda: number; hdb: number };
+  /** The screen after the quiet disk, when the request asked for it. */
+  frame?: Frame;
 }
 
 export type ReplayReply = { ok: true; result: ReplayResult } | { ok: false; error: string };
@@ -73,7 +84,32 @@ function deadline(ms: number, what: string): { promise: Promise<never>; clear():
   return { promise, clear: () => clearTimeout(timer) };
 }
 
-async function replay({ libv86, options, state, mode: [w, h] }: ReplayRequest): Promise<ReplayResult> {
+/**
+ * v86 keeps the guest's screen in an ImageData over its WebAssembly memory, which only exists in
+ * a browser; the capture run gets the same shape of object, so v86 renders into it unchanged.
+ */
+class ImageDataOverBuffer {
+  constructor(
+    readonly data: Uint8ClampedArray,
+    readonly width: number,
+    readonly height: number,
+  ) {}
+}
+
+/** The visible screen out of the VGA device's rendered buffer, whose rows are `virtual_width` wide. */
+function readFrame(vga: any): Frame {
+  if (!vga.graphical_mode) throw new Error("the guest's screen is not in a graphics mode");
+  vga.screen_fill_buffer();
+  const { screen_width: width, screen_height: height, virtual_width: stride } = vga;
+  const data: Uint8ClampedArray | undefined = vga.image_data?.data;
+  if (!data || data.byteLength < stride * height * 4) throw new Error("v86 rendered no screen buffer");
+  const rgba = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) rgba.set(data.subarray(y * stride * 4, (y * stride + width) * 4), y * width * 4);
+  return { width, height, rgba };
+}
+
+async function replay({ libv86, options, state, mode: [w, h], capture }: ReplayRequest): Promise<ReplayResult> {
+  if (capture) (globalThis as any).ImageData = ImageDataOverBuffer;
   const { V86 } = await import(libv86);
   let homepageRequested: () => void = () => {};
   const homepage = new Promise<void>((resolve) => (homepageRequested = resolve));
@@ -113,6 +149,7 @@ async function replay({ libv86, options, state, mode: [w, h] }: ReplayRequest): 
       if (done === "RESCHG_READY") failSwitch(new Error("RESCHG.EXE started after the snapshot"));
       if (done === "RESCHG_OK") switched = true;
     });
+    let frame: Frame | undefined;
     let dacEnabled = true;
     emulator.add_listener("dac-enable", () => (dacEnabled = true));
     emulator.add_listener("dac-disable", () => (dacEnabled = false));
@@ -127,6 +164,7 @@ async function replay({ libv86, options, state, mode: [w, h] }: ReplayRequest): 
         if (performance.now() > quietBy) throw new Error(`the disks were still read ${QUIET_DEADLINE_MS / 1000} s after Netscape's request`);
         await Promise.race([Bun.sleep(DISK_QUIET_MS / 10), switchFailed]);
       }
+      if (capture) frame = readFrame(emulator.v86.cpu.devices.vga);
     } finally {
       clearInterval(pull);
       await emulator.stop();
@@ -135,6 +173,7 @@ async function replay({ libv86, options, state, mode: [w, h] }: ReplayRequest): 
     return {
       reads: { hda: [...logs.hda.blocks], hdb: [...logs.hdb.blocks] },
       misses: { hda: logs.hda.misses, hdb: logs.hdb.misses },
+      frame,
     };
   } finally {
     await emulator.destroy();
