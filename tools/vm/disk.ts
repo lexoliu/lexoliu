@@ -37,21 +37,45 @@ export async function firstPartitionOffset(image: string): Promise<number> {
   return lba * SECTOR;
 }
 
-/**
- * The byte ranges of the image that hold the file at `path` in the first partition (a FAT12 or
- * FAT16 file system), from its cluster chain as mtools reports it, whole clusters included.
- */
-export async function fileExtents(image: string, path: string): Promise<[number, number][]> {
+/** Where the first partition's FAT12 or FAT16 file system keeps its parts, as image offsets. */
+interface FatLayout {
+  part: number;
+  clusterBytes: number;
+  /** The first FAT, [start, end). */
+  fat: [number, number];
+  /** The first byte of cluster 2. */
+  data: number;
+}
+
+async function fatLayout(image: string): Promise<FatLayout> {
   const part = await firstPartitionOffset(image);
   const bpb = new DataView((await Bun.file(image).slice(part, part + SECTOR).bytes()).buffer);
   const bytesPerSector = bpb.getUint16(11, true);
-  const clusterBytes = bpb.getUint8(13) * bytesPerSector;
   const reserved = bpb.getUint16(14, true);
   const fats = bpb.getUint8(16);
   const rootEntries = bpb.getUint16(17, true);
   const sectorsPerFat = bpb.getUint16(22, true);
   if (sectorsPerFat === 0) throw new Error(`${image}: FAT32 is not supported`);
-  const data = part + (reserved + fats * sectorsPerFat) * bytesPerSector + rootEntries * 32;
+  const fat = part + reserved * bytesPerSector;
+  return {
+    part,
+    clusterBytes: bpb.getUint8(13) * bytesPerSector,
+    fat: [fat, fat + sectorsPerFat * bytesPerSector],
+    data: fat + fats * sectorsPerFat * bytesPerSector + rootEntries * 32,
+  };
+}
+
+/** The byte range of the image that holds the first FAT of its first partition. */
+export async function firstFatExtent(image: string): Promise<[number, number]> {
+  return (await fatLayout(image)).fat;
+}
+
+/**
+ * The byte ranges of the image that hold the file at `path` in the first partition (a FAT12 or
+ * FAT16 file system), from its cluster chain as mtools reports it, whole clusters included.
+ */
+export async function fileExtents(image: string, path: string): Promise<[number, number][]> {
+  const { part, clusterBytes, data } = await fatLayout(image);
   const chain = await mtools("mshowfat", ["-i", `${image}@@${part}`, `::${path}`]);
   const runs = [...chain.matchAll(/<(\d+)(?:-(\d+))?>/g)];
   if (runs.length === 0) throw new Error(`mshowfat printed no clusters for ${path}: ${chain}`);

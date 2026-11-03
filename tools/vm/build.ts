@@ -7,7 +7,8 @@
 import { homedir } from "node:os";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, fileExtents, firstPartitionOffset, run, writeParts } from "./disk.ts";
+import { pickGuestMode } from "../../guest-display.js";
+import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, fileExtents, firstFatExtent, firstPartitionOffset, run, writeParts } from "./disk.ts";
 import { type ModesFile, bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE, fetchHdaBase } from "./hda.ts";
 import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
@@ -38,18 +39,19 @@ const cache = option("--cache", join(process.env.XDG_CACHE_HOME ?? join(homedir(
 const work = join(cache, "work");
 
 /**
- * The display switches the boot after the snapshot is recorded with, as the page switches the
- * guest to fit the viewport: the largest portrait mode and the largest landscape mode other
- * than the snapshot's within its pixel count, so the preload holds what a switch in either
- * orientation reads.
+ * Every mode the page's pickGuestMode can switch the guest to at power-on, the boot after the
+ * snapshot being recorded in each. A viewport of a mode's own size picks every mode pickGuestMode
+ * ever picks: among the modes of one aspect ratio, a viewport at a mode's size up to the
+ * snapshot's pixel count picks that mode, and one at a larger mode's size picks what every
+ * viewport of that ratio past the snapshot's pixel count picks.
  */
-function pageModeSwitches(modes: [number, number][], [sw, sh]: [number, number]): [number, number][] {
-  const fit = modes.filter(([w, h]) => w * h <= sw * sh && !(w === sw && h === sh));
-  const largest = (ms: [number, number][]) => {
-    if (ms.length === 0) throw new Error("the guest has no display mode to switch to in one orientation");
-    return ms.reduce((a, b) => (b[0] * b[1] > a[0] * a[1] ? b : a));
-  };
-  return [largest(fit.filter(([w, h]) => h > w)), largest(fit.filter(([w, h]) => w > h))];
+function powerOnModes(modes: [number, number][], [sw, sh]: [number, number]): [number, number][] {
+  const picked = new Map<string, [number, number]>();
+  for (const [w, h] of modes) {
+    const mode: [number, number] = pickGuestMode(modes, sw * sh, w, h);
+    picked.set(mode.join("x"), mode);
+  }
+  return [...picked.values()];
 }
 
 const timings: [string, number][] = [];
@@ -136,12 +138,20 @@ try {
         size: DISK_SIZE,
         chunkSize: CHUNK_SIZE,
         image,
-        pinned: (await Promise.all(REGISTRY_HIVES.map((hive) => fileExtents(image, hive)))).flat(),
+        // Each disk's FAT is preloaded whole too: which of its sectors the boot reads follows which
+        // clusters the guest looks up and allocates, and that changes with its timing.
+        pinned: [await firstFatExtent(image), ...(await Promise.all(REGISTRY_HIVES.map((hive) => fileExtents(image, hive)))).flat()],
       },
-      hdb: { url: join(out, "hdb", ".img"), size: HDB_SIZE, chunkSize: HDB_CHUNK_SIZE, image: join(work, "d.img"), pinned: [] },
+      hdb: {
+        url: join(out, "hdb", ".img"),
+        size: HDB_SIZE,
+        chunkSize: HDB_CHUNK_SIZE,
+        image: join(work, "d.img"),
+        pinned: [await firstFatExtent(join(work, "d.img"))],
+      },
       startupSound: parseWavFormat(await Bun.file(wav).bytes()),
       screen: modes.snapshotMode,
-      modeSwitches: pageModeSwitches(modes.modes, modes.snapshotMode),
+      powerOnModes: powerOnModes(modes.modes, modes.snapshotMode),
     });
   });
 
