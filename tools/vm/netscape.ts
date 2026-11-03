@@ -8,6 +8,12 @@ import type { SourceName } from "./sources.ts";
 
 const HERE = dirname(import.meta.path);
 
+/** Where the guest sees Netscape (NETSCAPE.REG names it too). */
+export const NETSCAPE_EXE = "D:\\NETSCAPE\\NETSCAPE.EXE";
+/** D:'s volume label and serial number; the desktop shortcuts (shortcuts.ts) name the volume they point into. */
+export const DRIVE_D_LABEL = "NETSCAPE";
+export const DRIVE_D_SERIAL = 0x4e53_0003;
+
 /** Compiles unshieldv3 (InstallShield 3 archive extractor) with the host C/C++ compiler. */
 export async function buildUnshield(src: Record<SourceName, string>, workDir: string): Promise<string> {
   const dir = join(workDir, "unshieldv3");
