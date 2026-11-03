@@ -67,7 +67,7 @@ async function manifest(): Promise<Record<string, string>> {
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 
-const built = await Bun.build({ entrypoints: [join(ROOT, "index.html")], outdir: out });
+const built = await Bun.build({ entrypoints: [join(ROOT, "index.html")], outdir: out, splitting: true });
 if (!built.success) {
   for (const log of built.logs) console.error(log);
   throw new Error("bundling index.html failed");

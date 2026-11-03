@@ -98,9 +98,32 @@ emulator.add_listener("emulator-loaded", () => {
   emulator.network_adapter.fetch = guestHttpFetch;
 });
 
+// Opens a URL in the visitor's browser and leaves Netscape on its page.
+function openInHostBrowser(url) {
+  // The "noopener" feature makes window.open return null even on success, so
+  // the refusal check needs the handle; the opener link is cut by hand.
+  const opened = window.open(url, "_blank");
+  if (opened) {
+    opened.opener = null;
+  } else {
+    window.location.assign(url);
+  }
+}
+
+// http://github.com/ is answered from GitHub's API and raw files (guest-github.js), loaded with its
+// Markdown parser when Netscape first asks for it.
+let githubSite;
+function github() {
+  githubSite ??= import("./guest-github.js").then(({ GitHubSite }) => new GitHubSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
+  return githubSite;
+}
+
 async function guestHttpFetch(input) {
   const parsed = new URL(typeof input === "string" ? input : input.url);
   const host = parsed.hostname.toLowerCase();
+  if (host === "github.com" || host === "www.github.com") {
+    return (await github()).handle(parsed);
+  }
   if (host === "lexo.cool" || host === "www.lexo.cool") {
     const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
     const mailAddress = mailAddressOf(parsed.pathname);
@@ -137,14 +160,7 @@ async function guestHttpFetch(input) {
 
   // Any other host: open it in the visitor's browser and keep Netscape on its page.
   const externalUrl = `https://${host}${parsed.pathname}${parsed.search}`;
-  // The "noopener" feature makes window.open return null even on success, so
-  // the refusal check needs the handle; the opener link is cut by hand.
-  const opened = window.open(externalUrl, "_blank");
-  if (opened) {
-    opened.opener = null;
-  } else {
-    window.location.assign(externalUrl);
-  }
+  openInHostBrowser(externalUrl);
   return new Response(null, { status: 204, statusText: "No Content" });
 }
 

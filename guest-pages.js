@@ -127,7 +127,7 @@ ${projectCard("Skyzen", "/logos/skyzen.jpg", "http://github.com/zen-rs/skyzen", 
 </TR>
 </TABLE>
 <P>
-<FONT SIZE="-1">Tip: Clicking any GitHub link above opens the repository in your browser.</FONT>`
+<FONT SIZE="-1">Tip: Clicking any GitHub link above browses the repository right here in Netscape.</FONT>`
   ),
 
   "/about.html": wrapHtml32(
