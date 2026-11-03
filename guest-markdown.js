@@ -146,7 +146,15 @@ export async function renderMarkdown(source, links, highlight) {
     const at = fenced.indexOf(all[index]);
     return at === -1 || fences[at] === undefined ? plainFence(all, index, options, env_, self) : `<pre data-fence="${at}"></pre>\n`;
   };
-  const doc = new DOMParser().parseFromString(`<body>${md.renderer.render(tokens, md.options, env)}`, "text/html");
+  return renderHtml(md.renderer.render(tokens, md.options, env), links, fences);
+}
+
+/**
+ * HTML -> HTML 3.2, with `links` as for renderMarkdown and `fences` the highlighted code blocks its
+ * <pre data-fence> elements name. The text is parsed into an inert document, nothing in it loads.
+ */
+export function renderHtml(html, links, fences = []) {
+  const doc = new DOMParser().parseFromString(`<body>${html}`, "text/html");
   return new Walker(links, fences).children(doc.body);
 }
 

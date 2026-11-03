@@ -87,6 +87,19 @@ export function formatDate(iso) {
   return iso.slice(0, 10);
 }
 
+/** Units of an age, largest first, with their length in seconds. */
+const AGE_UNITS = [["year", 365 * 86400], ["month", 30 * 86400], ["day", 86400], ["hour", 3600], ["minute", 60]];
+
+/** `unixSeconds` relative to `nowMs`: "5 minutes ago", "1 day ago"; under a minute is "just now". */
+export function formatAge(unixSeconds, nowMs) {
+  const seconds = Math.floor(nowMs / 1000) - unixSeconds;
+  for (const [unit, length] of AGE_UNITS) {
+    const n = Math.floor(seconds / length);
+    if (n >= 1) return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+  }
+  return "just now";
+}
+
 /** Path segments as a URL path, each percent-encoded. */
 export function encodePath(segments) {
   return segments.map(encodeURIComponent).join("/");
