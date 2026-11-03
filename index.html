@@ -753,15 +753,23 @@
 
     screenContainer.addEventListener("contextmenu", (e) => e.preventDefault());
 
+    // The wheel scrolls like a swipe, through RESCHG.EXE at the wheel's point. Sent as mouse
+    // input instead, it reaches VBMOUSE.DRV, which scrolls from inside its mouse interrupt
+    // callback; the USER calls it makes there re-enter whatever program the interrupt stopped,
+    // which then dies with "This program has performed an illegal operation" or hangs Windows.
+    const wheelAcc = { x: 0, y: 0 }; // guest px not yet sent as whole lines
     screenContainer.addEventListener(
       "wheel",
       (e) => {
-        if (!emulator || !emulator.bus) return;
-        const delta = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
-        if (delta !== 0) {
-          emulator.bus.send("mouse-wheel", [delta, 0]);
-        }
         e.preventDefault();
+        if (!powered) return;
+        const guestPx =
+          e.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? guestPerClientPx()
+          : e.deltaMode === WheelEvent.DOM_DELTA_LINE ? SCROLL_LINE_GUEST_PX
+          : guestSize[1];
+        const [gx, gy] = guestPoint(e.clientX, e.clientY);
+        wheelAcc.y = sendScroll("SCROLL", gx, gy, wheelAcc.y + e.deltaY * guestPx);
+        wheelAcc.x = sendScroll("HSCROLL", gx, gy, wheelAcc.x + e.deltaX * guestPx);
       },
       { passive: false }
     );
