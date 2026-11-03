@@ -26,7 +26,6 @@ jobs:
           key: vm-assets-${{ hashFiles('tools/vm/**', 'guest-pages.js', 'guest-display.js', '.github/workflows/deploy.yml') }}
 
       - name: Set up Bun
-        if: steps.vm-assets.outputs.cache-hit != 'true'
         uses: oven-sh/setup-bun@v2
 
       - name: Set up Zig
@@ -66,9 +65,13 @@ jobs:
           path: public/vm
           key: ${{ steps.vm-assets.outputs.cache-primary-key }}
 
+      # Bundles the page and writes the content-hash manifest of every runtime file (tools/site).
+      - name: Build site
+        run: bun tools/site/build.ts
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy . --project-name=lexo
+          command: pages deploy dist --project-name=lexo
