@@ -46,6 +46,18 @@ export const VBEMP_PATH = "/WINDOWS/SYSTEM/VBEMP.DRV";
 
 const REGEDIT_IMPORT = "C:\\WINDOWS\\REGEDIT.EXE D:\\NETSCAPE.REG";
 
+/**
+ * SB16SND.DRV's [sndblst.drv] intrate in SYSTEM.INI: the wave interrupts per second, from
+ * which the driver sizes its DMA block (bytes per second / intrate, a multiple of 4, at most
+ * half the DMA buffer SB16.VXD allocates less 16 bytes) and its auto-init ring (two blocks).
+ * The driver's own default is 16, a 62 ms block for the startup sound (22050 Hz, 8-bit mono);
+ * when the guest is busy for longer than one block, the SB16 replays the stale half of the
+ * ring. The driver reads the key at a wave open and then deletes it, so it sizes the open that
+ * plays the startup sound, the one the saved state holds.
+ */
+const SB16_INTERRUPTS_PER_SECOND = 4;
+const SB16_SECTION = "[sndblst.drv]";
+
 export const cDrivePatches: FilePatch[] = [
   {
     path: "/AUTOEXEC.BAT",
@@ -55,6 +67,16 @@ export const cDrivePatches: FilePatch[] = [
       if (text.includes(REGEDIT_IMPORT)) throw new Error("AUTOEXEC.BAT already imports NETSCAPE.REG");
       const sep = text.length === 0 || text.endsWith("\r\n") ? "" : "\r\n";
       return Buffer.from(`${text}${sep}${REGEDIT_IMPORT}\r\n`, "latin1");
+    },
+  },
+  {
+    path: "/WINDOWS/SYSTEM.INI",
+    why: `size the SB16 wave DMA block for ${SB16_INTERRUPTS_PER_SECOND} interrupts per second`,
+    apply(content) {
+      const text = Buffer.from(content).toString("latin1");
+      if (text.toLowerCase().includes(SB16_SECTION)) throw new Error(`SYSTEM.INI already has ${SB16_SECTION}`);
+      const sep = text.length === 0 || text.endsWith("\r\n") ? "" : "\r\n";
+      return Buffer.from(`${text}${sep}${SB16_SECTION}\r\nintrate=${SB16_INTERRUPTS_PER_SECOND}\r\n`, "latin1");
     },
   },
   {

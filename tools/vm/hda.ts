@@ -9,15 +9,20 @@ import { download, sha256 } from "./sources.ts";
 const BASE_URL = "https://i.copy.sh/windows95-v3/";
 export const CHUNK_SIZE = 256 * 1024;
 export const DISK_SIZE = 471859200;
-const CHUNK_COUNT = Math.ceil(DISK_SIZE / CHUNK_SIZE);
 const CONCURRENCY = 16;
 const MANIFEST = join(dirname(import.meta.path), "hda.sha256");
 
-/** Chunk file names in disk order, as v86 requests them with `use_parts`. */
-export const chunkNames: string[] = Array.from({ length: CHUNK_COUNT }, (_, k) => {
-  const start = k * CHUNK_SIZE;
-  return `${start}-${Math.min(start + CHUNK_SIZE, DISK_SIZE)}.img`;
-});
+/**
+ * Chunk file names in disk order, as v86 requests them with `use_parts` and a
+ * `fixed_chunk_size`: v86 names every chunk, the last included, by a full chunk's range, so
+ * `chunkSize` must divide `diskSize`.
+ */
+export function partNames(diskSize: number, chunkSize: number): string[] {
+  if (diskSize % chunkSize !== 0) throw new Error(`chunk size ${chunkSize} does not divide the disk size ${diskSize}`);
+  return Array.from({ length: diskSize / chunkSize }, (_, k) => `${k * chunkSize}-${(k + 1) * chunkSize}.img`);
+}
+
+export const chunkNames = partNames(DISK_SIZE, CHUNK_SIZE);
 
 async function readManifest(): Promise<Map<string, string>> {
   const expected = new Map<string, string>();
@@ -26,8 +31,8 @@ async function readManifest(): Promise<Map<string, string>> {
     const [hash, name] = line.split("  ");
     expected.set(name, hash);
   }
-  if (expected.size !== CHUNK_COUNT) {
-    throw new Error(`hda.sha256 has ${expected.size} entries, expected ${CHUNK_COUNT}`);
+  if (expected.size !== chunkNames.length) {
+    throw new Error(`hda.sha256 has ${expected.size} entries, expected ${chunkNames.length}`);
   }
   return expected;
 }
