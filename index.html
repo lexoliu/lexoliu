@@ -432,8 +432,10 @@
     const MAX_GUEST_PIXELS = snapshotW * snapshotH;
 
     const monitorFrame = document.getElementById("monitor-frame");
-    let vmLoaded = false;
-    let reschgReady = false;
+    let powered = false;
+    // RESCHG.EXE listens on COM1 in the saved state: the generator only emits modes.json
+    // after seeing it ready before the snapshot, and it resets the UART when it starts.
+    if (guestDisplay.reschgInState !== true) throw new Error("modes.json: RESCHG.EXE is not running in the saved state");
     let requestedMode = null;
 
     // The frame always takes the guest screen's own aspect ratio, so pixels stay square.
@@ -453,15 +455,14 @@
     }
 
     function syncGuestResolution() {
-      if (!vmLoaded || !reschgReady) return;
+      if (!powered) return;
       const [w, h] = pickGuestMode(guestDisplay.modes, window.innerWidth, window.innerHeight);
       if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
       requestedMode = [w, h];
       emulator.serial0_send(`RES ${w} ${h}\n`);
     }
 
-    // RESCHG.EXE announces itself on COM1 once it runs (it resets the UART, dropping anything
-    // sent earlier) and answers each switch with RESCHG_OK or RESCHG_ERR.
+    // RESCHG.EXE answers each switch with RESCHG_OK or RESCHG_ERR.
     let serialLine = "";
     emulator.add_listener("serial0-output-byte", (byte) => {
       const c = String.fromCharCode(byte);
@@ -471,11 +472,7 @@
       }
       const line = serialLine;
       serialLine = "";
-      if (line === "RESCHG_READY") {
-        reschgReady = true;
-        requestedMode = null;
-        syncGuestResolution();
-      } else if (line === "RESCHG_ERR") {
+      if (line === "RESCHG_ERR") {
         console.error(`RESCHG.EXE could not switch the guest to ${requestedMode.join("x")}`);
       }
     });
@@ -487,9 +484,7 @@
     window.addEventListener("resize", scheduleResolutionSync);
 
     emulator.add_listener("emulator-loaded", () => {
-      vmLoaded = true;
       powerProgress.style.width = "100%";
-      syncGuestResolution();
       powerButton.disabled = false;
     });
 
@@ -499,6 +494,8 @@
       powerScreen.hidden = true;
       emulator.speaker_adapter.dac.enabled = true;
       emulator.run();
+      powered = true;
+      syncGuestResolution();
     });
   </script>
 </body>

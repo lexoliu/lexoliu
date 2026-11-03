@@ -55,6 +55,8 @@ REGEDIT4
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run]
 "Netscape"="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\RunServices]
 "ResChg"="D:\\RESCHG.EXE"
 
 [HKEY_CURRENT_USER\Software\Netscape\Netscape Navigator\Main]

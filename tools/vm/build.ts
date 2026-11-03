@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, fileExtents, firstPartitionOffset, run, writeParts } from "./disk.ts";
-import { bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
+import { type ModesFile, bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE, fetchHdaBase } from "./hda.ts";
 import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
 import { VBEMP_PATH, applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
@@ -117,7 +117,6 @@ try {
     const modes = guestModes(await Bun.file(join(out, "vgabios.bin")).bytes(), await Bun.file(drv).bytes(), boot);
     checkAddedModes(await Bun.file(src.vgabios).bytes(), modes);
     console.log(`display modes at ${boot.bitsPerPixel} bpp: ${modes.modes.map(([w, h]) => `${w}x${h}`).join(" ")}`);
-    await Bun.write(join(out, MODES_FILE), `${JSON.stringify(modes)}\n`);
     return modes;
   });
 
@@ -145,6 +144,9 @@ try {
       modeSwitches: pageModeSwitches(modes.modes, modes.snapshotMode),
     });
   });
+
+  // Written once the snapshot is taken: it only exists if RESCHG.EXE was running in the state.
+  await Bun.write(join(out, MODES_FILE), `${JSON.stringify({ ...modes, reschgInState: true } satisfies ModesFile)}\n`);
 
   await stage("compress state", async () => {
     await Bun.write(join(out, STATE_FILE), await Bun.zstdCompress(snapshot.state, { level: STATE_ZSTD_LEVEL }));

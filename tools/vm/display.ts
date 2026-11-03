@@ -266,6 +266,12 @@ export interface GuestModes {
   modes: [number, number][];
 }
 
+/** modes.json: the guest display plus a fact only the snapshot establishes. */
+export interface ModesFile extends GuestModes {
+  /** RESCHG.EXE is running and listening on COM1 in the saved state. */
+  reschgInState: true;
+}
+
 /** Modes settable at the boot depth given the BIOS and VBEMP as they are served. */
 export function guestModes(rom: Uint8Array, drv: Uint8Array, boot: BootDisplay): GuestModes {
   const { bitsPerPixel } = boot;

@@ -8,7 +8,10 @@
 // starts DMA, so on this image the first playback is Windows' SystemStart event, fired once
 // the shell is up. The event is accepted only when the DSP is programmed for the startup
 // WAV's own sample rate, width and channel count, no sample has been consumed yet, and the
-// VGA is in a graphics mode; anything else fails the build.
+// VGA is in a graphics mode; anything else fails the build. RESCHG.EXE, which switches the
+// display on the page's request over COM1, starts from the RunServices key before the shell
+// and so before that moment: the boot must have seen its RESCHG_READY by then, and the state
+// holds it running and listening, so the page can ask for the viewer's mode at power-on.
 //
 // Preload: both disks are v86 on-demand buffers, which serve a read from their 256-byte block
 // cache when every block of it is cached, and the saved state carries each buffer's blocks
@@ -236,7 +239,8 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
   /**
    * Runs the stopped machine through the boot after the snapshot: on until Netscape requests
    * the homepage and the disks in `reads` then go quiet, switching the display through
-   * `inputs.modeSwitches` once RESCHG.EXE is up as the page does; then stops it.
+   * `inputs.modeSwitches` as the page does (the first at once, RESCHG.EXE being up in the
+   * state, each next after the answer to the one before); then stops it.
    */
   async function runBoot(emulator: any, reads: ReadLog[]): Promise<void> {
     const switches = [...inputs.modeSwitches];
@@ -252,10 +256,13 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
       const done = line;
       line = "";
       if (done === "RESCHG_ERR") failSwitch(new Error("RESCHG.EXE could not switch the display mode"));
-      if ((done === "RESCHG_READY" || done === "RESCHG_OK") && switches.length > 0) {
-        const [w, h] = switches.shift()!;
-        emulator.serial0_send(`RES ${w} ${h}\n`);
-      }
+      if (done === "RESCHG_READY") failSwitch(new Error("RESCHG.EXE started after the snapshot"));
+      if (done === "RESCHG_OK") nextSwitch();
+    };
+    const nextSwitch = () => {
+      if (switches.length === 0) return;
+      const [w, h] = switches.shift()!;
+      emulator.serial0_send(`RES ${w} ${h}\n`);
     };
     let dacEnabled = true;
     const onEnable = () => (dacEnabled = true);
@@ -268,6 +275,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
       const verify = deadline(NETSCAPE_DEADLINE_MS, "Netscape's request for http://lexo.cool/");
       const homepage = new Promise<void>((resolve) => (homepageRequested = resolve));
       emulator.run();
+      nextSwitch();
       await Promise.race([homepage, verify.promise, switchFailed]).finally(verify.clear);
       const quietBy = performance.now() + QUIET_DEADLINE_MS;
       while (performance.now() - Math.max(...reads.map((r) => r.last)) < DISK_QUIET_MS) {
@@ -288,6 +296,15 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
   try {
     const cold = new V86({ ...options, autostart: true });
     let atStartupSound: ArrayBuffer;
+    let reschgReady = false;
+    let coldLine = "";
+    cold.add_listener("serial0-output-byte", (byte: number) => {
+      if (byte !== 10) coldLine += String.fromCharCode(byte);
+      else {
+        if (coldLine === "RESCHG_READY") reschgReady = true;
+        coldLine = "";
+      }
+    });
     try {
       const boot = deadline(BOOT_DEADLINE_MS, "the Windows 95 startup sound");
       const atSound = new Promise<void>((resolve, reject) => {
@@ -307,6 +324,8 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
             reject(new Error("SB16 playback had consumed samples before it was reported"));
           } else if (!vga.graphical_mode) {
             reject(new Error("first SB16 playback started before Windows' GUI"));
+          } else if (!reschgReady) {
+            reject(new Error("first SB16 playback started before RESCHG.EXE reported ready"));
           } else {
             resolve();
           }
