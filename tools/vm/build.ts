@@ -12,7 +12,8 @@ import { guestModeFor } from "../../guest-display.js";
 import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, diskFiles, fileExtents, firstFatExtent, firstPartitionOffset, run, writeParts } from "./disk.ts";
 import { type GuestDisplay, type ModesFile, bootDisplay, guestDisplay } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE, fetchHdaBase } from "./hda.ts";
-import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
+import { DRIVE_D_LABEL, DRIVE_D_SERIAL, buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
+import { buildDesktopShortcuts } from "./shortcuts.ts";
 import { buildLogos } from "./logos.ts";
 import { previewMode, renderPreview } from "./preview.ts";
 import { VBE9X_DRV_PATH, cDrivePatches } from "./patches.ts";
@@ -105,12 +106,14 @@ try {
         const root = join(work, "d");
         await mkdir(root);
         await buildDriveD(src.netscape, unshield, reschg, { reg: src["vbe9x/vbe9x.reg"], notices: src["vbe9x/THIRD-PARTY-NOTICES"] }, root, work);
-        await buildHdb(join(work, "d.img"), root, "NETSCAPE");
+        await buildHdb(join(work, "d.img"), root, DRIVE_D_LABEL, DRIVE_D_SERIAL);
         await writeParts(join(work, "d.img"), join(out, "hdb"), HDB_CHUNK_SIZE);
       })(),
-      buildHda(join(cache, "hda"), join(out, "hda"), work, cDrivePatches, [
-        { path: VBE9X_DRV_PATH, from: src["vbe9x/vbe9x.drv"], why: "the display driver, vbe9x (display.ts)" },
-      ]),
+      (async () =>
+        buildHda(join(cache, "hda"), join(out, "hda"), work, cDrivePatches, [
+          { path: VBE9X_DRV_PATH, from: src["vbe9x/vbe9x.drv"], why: "the display driver, vbe9x (display.ts)" },
+          ...(await buildDesktopShortcuts(work)),
+        ]))(),
     ]),
   );
 
