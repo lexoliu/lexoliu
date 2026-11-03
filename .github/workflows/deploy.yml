@@ -16,6 +16,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Set up Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Install mtools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools
+
+      - name: Restore VM inputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/lexoliu-vm/sources
+            ~/.cache/lexoliu-vm/hda
+          key: vm-inputs-${{ hashFiles('tools/vm/sources.json', 'tools/vm/hda.sha256') }}
+
+      - name: Build VM assets
+        run: bun tools/vm/build.ts
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

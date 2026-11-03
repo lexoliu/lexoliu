@@ -1,54 +1,493 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;700&display=swap');
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        body {
-            padding: 7vw;
-            font-family: 'Martian Mono', monospace;
-        }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050505;
+      color: #e0e0e0;
+      font-family: "MS Sans Serif", "Tahoma", "Geneva", sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
 
-        div {
-            margin-bottom: 50px;
-        }
+    #app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #008080;
+    }
 
-        .heading {
-            font-size: 40px;
-            font-weight: bold;
-        }
+    /* Full-Viewport Responsive Monitor Container */
+    #monitor-frame {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #008080;
+      overflow: hidden;
+    }
 
-        p {
-            margin-bottom: 10px;
-        }
+    /* v86 screen_container */
+    #screen_container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background: #000;
+    }
 
-        a:link {
-            color: black;
-            text-decoration: underline;
-        }
+    #screen_container > div {
+      white-space: pre;
+      font: 14px monospace;
+      line-height: 14px;
+    }
 
-        a:active {
-            color: black;
-        }
+    #screen_container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      cursor: none;
+    }
 
-        a:visited {
-            color: black;
-        }
-    </style>
+    /* Power button overlay */
+    #power-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 25;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+    }
+
+    #power-screen[hidden] {
+      display: none;
+    }
+
+    #power-button {
+      width: 72px;
+      height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 2px solid #8a8a8a;
+      border-radius: 50%;
+      color: #8a8a8a;
+      cursor: not-allowed;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #power-button:not(:disabled) {
+      border-color: #e0e0e0;
+      color: #e0e0e0;
+      cursor: pointer;
+    }
+
+    #power-button:focus-visible {
+      outline: 2px solid #e0e0e0;
+      outline-offset: 4px;
+    }
+
+    #power-button svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    #power-progress {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 2px;
+      width: 0;
+      background: #e0e0e0;
+    }
+  </style>
 </head>
 <body>
-    <div class="heading">👋 Hello,I'm Lexo.</div>
-    <div>
-        <p>- I'm a CS undergraduate studying in 🇺🇸, and my hometown is Hangzhou.</p>
-        <p>- I'm working on <a href="https://github.com/May-Agent/may">May</a>, <a href="https://github.com/water-rs/waterui">WaterUI</a>, and <a href="https://github.com/zen-rs/skyzen">Skyzen</a>.</p>
-        <p>- I'm a Rustacean who has been learning Rust for 6 years.</p>
-        <p>- I'm also keen to meet people from different backgrounds , so feel free to drop me a message :) </p>
+  <div id="app">
+    <div id="monitor-frame">
+      <div id="power-screen">
+        <button id="power-button" type="button" aria-label="Power on" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
+        </button>
+        <div id="power-progress"></div>
+      </div>
+
+      <!-- v86 Screen Container -->
+      <div id="screen_container">
+        <div style="white-space: pre; font: 14px monospace; line-height: 14px"></div>
+        <canvas style="display: none"></canvas>
+      </div>
     </div>
-    <div>
-        <p>Twitter: <a href="https://twitter.com/is_lexo">@is_lexo</a></p>
-        <p>Github: <a href="https://github.com/lexoliu">@lexoliu</a></p>
-        <p>Email: <a href="mailto:me@lexo.cool">me@lexo.cool</a></p>
-    </div>
+  </div>
+
+  <script src="/public/vm/libv86.js"></script>
+  <script type="module">
+    // =========================================================================
+    // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
+    // =========================================================================
+    import { PAGES, wrapHtml32 } from "/guest-pages.js";
+    import { pickGuestMode } from "/guest-display.js";
+
+    // =========================================================================
+    // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
+    // =========================================================================
+    const powerScreen = document.getElementById("power-screen");
+    const powerButton = document.getElementById("power-button");
+    const powerProgress = document.getElementById("power-progress");
+
+    // The guest display as the VM generator built it (tools/vm/display.ts): its VRAM size,
+    // the mode in the saved state, and the modes the guest can switch to.
+    const guestDisplay = await fetch("/public/vm/modes.json").then(async (res) => {
+      if (!res.ok) throw new Error(`modes.json: HTTP ${res.status}`);
+      return res.json();
+    });
+
+    const emulator = new V86({
+      wasm_path: "/public/vm/v86.wasm",
+      memory_size: 64 * 1024 * 1024,
+      vga_memory_size: guestDisplay.vgaMemorySize,
+      screen_container: document.getElementById("screen_container"),
+      bios: { url: "/public/vm/seabios.bin" },
+      vga_bios: { url: "/public/vm/vgabios.bin" },
+      hda: {
+        url: "/public/vm/hda/.img",
+        size: 471859200,
+        async: true,
+        fixed_chunk_size: 256 * 1024,
+        use_parts: true,
+      },
+      hdb: {
+        url: "/public/vm/hdb/.img",
+        size: 8257536,
+        async: true,
+        fixed_chunk_size: 128 * 1024,
+        use_parts: true,
+      },
+      // The state also carries every disk block the boot after it reads (tools/vm/snapshot.ts),
+      // so pressing power reads no chunk over the network.
+      initial_state: {
+        url: "/public/vm/win95-netscape.state.bin.zst?v=5",
+      },
+      disable_mouse: true,
+      network_relay_url: "fetch",
+      // The guest's NE2000 driver keeps the MAC from the saved state; without this,
+      // v86 randomises the card's MAC on load and drops every frame sent to the guest.
+      preserve_mac_from_state_image: true,
+      autostart: false,
+    });
+
+    window.emulator = emulator;
+
+    // Restoring the state re-announces the SB16 playback (the startup sound), which enables
+    // v86's speaker DAC, and v86 pauses its audio only when a running machine stops; so the
+    // speaker would pull samples from the powered-off machine, moving the guest's DMA ring and
+    // raising its end-of-block interrupt before the guest runs. The guest then refills the half
+    // the card is about to play, losing the sound's start and racing the card on every block.
+    // The DAC stays off until the power press runs the machine.
+    emulator.add_listener("emulator-loaded", () => {
+      emulator.speaker_adapter.dac.enabled = false;
+    });
+
+    // Guest HTTP from Netscape arrives through the network adapter's fetch hook,
+    // which v86 creates asynchronously, just before it announces "emulator-loaded".
+    emulator.add_listener("emulator-loaded", () => {
+      emulator.network_adapter.fetch = guestHttpFetch;
+    });
+
+    async function guestHttpFetch(input) {
+      const parsed = new URL(typeof input === "string" ? input : input.url);
+      const host = parsed.hostname.toLowerCase();
+      if (host === "lexo.cool" || host === "www.lexo.cool") {
+        const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
+        const html = PAGES[pathKey];
+        const found = html !== undefined;
+        const bytes = new TextEncoder().encode(
+          found ? html : wrapHtml32("404 Not Found", "404 Not Found", `<P>No page at <TT>${pathKey}</TT>. <A HREF="http://lexo.cool/">Return home</A>.`)
+        );
+        return new Response(bytes, {
+          status: found ? 200 : 404,
+          statusText: found ? "OK" : "Not Found",
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Length": String(bytes.byteLength),
+          },
+        });
+      }
+
+      // Any other host: open it in the visitor's browser and keep Netscape on its page.
+      const externalUrl = `https://${host}${parsed.pathname}${parsed.search}`;
+      // The "noopener" feature makes window.open return null even on success, so
+      // the refusal check needs the handle; the opener link is cut by hand.
+      const opened = window.open(externalUrl, "_blank");
+      if (opened) {
+        opened.opener = null;
+      } else {
+        window.location.assign(externalUrl);
+      }
+      return new Response(null, { status: 204, statusText: "No Content" });
+    }
+
+
+    // =========================================================================
+    // 2b. Custom Pointer & Touch Input Bridge (Fixes v86 outside-click & PS/2 bugs)
+    // =========================================================================
+    const screenContainer = document.getElementById("screen_container");
+    let pointerButtons = [false, false, false]; // [left, middle, right]
+    let lastClientX = null;
+    let lastClientY = null;
+
+    function sendGuestPointer(clientX, clientY, buttonsChanged) {
+      if (!emulator || !emulator.bus) return;
+      const rect = screenContainer.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      let dx = 0;
+      let dy = 0;
+      if (lastClientX !== null && lastClientY !== null) {
+        dx = clientX - lastClientX;
+        dy = clientY - lastClientY;
+      }
+      lastClientX = clientX;
+      lastClientY = clientY;
+
+      // VBMOUSE needs a tiny PS/2 movement packet (IRQ 12) to wake up and read the 0x5658 absolute queue!
+      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+      const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+      emulator.bus.send("mouse-absolute", [x, y, rect.width, rect.height]);
+      if (dx !== 0 || dy !== 0) {
+        emulator.bus.send("mouse-delta", [dx, -dy]);
+      }
+      if (buttonsChanged) {
+        emulator.bus.send("mouse-click", [pointerButtons[0], pointerButtons[1], pointerButtons[2]]);
+      }
+    }
+
+    function releaseAllPointerButtons() {
+      if (pointerButtons[0] || pointerButtons[1] || pointerButtons[2]) {
+        pointerButtons = [false, false, false];
+        if (emulator && emulator.bus) {
+          emulator.bus.send("mouse-click", [false, false, false]);
+        }
+      }
+    }
+
+    screenContainer.addEventListener("mousemove", (e) => {
+      // Sync button state from e.buttons bitmask in case mouseup occurred outside window
+      const left = (e.buttons & 1) !== 0;
+      const right = (e.buttons & 2) !== 0;
+      const middle = (e.buttons & 4) !== 0;
+      const changed =
+        left !== pointerButtons[0] ||
+        middle !== pointerButtons[1] ||
+        right !== pointerButtons[2];
+      pointerButtons = [left, middle, right];
+      sendGuestPointer(e.clientX, e.clientY, changed);
+    });
+
+    screenContainer.addEventListener("mousedown", (e) => {
+      if (e.button === 0) pointerButtons[0] = true;
+      else if (e.button === 1) pointerButtons[1] = true;
+      else if (e.button === 2) pointerButtons[2] = true;
+      sendGuestPointer(e.clientX, e.clientY, true);
+      window.focus();
+      e.preventDefault();
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      const idx = e.button === 0 ? 0 : e.button === 1 ? 1 : e.button === 2 ? 2 : -1;
+      if (idx !== -1 && pointerButtons[idx]) {
+        pointerButtons[idx] = false;
+        sendGuestPointer(e.clientX, e.clientY, true);
+      }
+    });
+
+    window.addEventListener("blur", releaseAllPointerButtons);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) releaseAllPointerButtons();
+    });
+
+    screenContainer.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    screenContainer.addEventListener(
+      "wheel",
+      (e) => {
+        if (!emulator || !emulator.bus) return;
+        const delta = e.deltaY < 0 ? 1 : e.deltaY > 0 ? -1 : 0;
+        if (delta !== 0) {
+          emulator.bus.send("mouse-wheel", [delta, 0]);
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    // Mobile Touch Support: Tap to click, 1-finger vertical drag to scroll page
+    let touchState = null;
+    screenContainer.addEventListener(
+      "touchstart",
+      (e) => {
+        if (e.touches.length === 1) {
+          const t = e.touches[0];
+          touchState = {
+            startX: t.clientX,
+            startY: t.clientY,
+            lastY: t.clientY,
+            moved: false,
+          };
+          sendGuestPointer(t.clientX, t.clientY, false);
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    screenContainer.addEventListener(
+      "touchmove",
+      (e) => {
+        if (e.touches.length === 1 && touchState) {
+          const t = e.touches[0];
+          const dx = t.clientX - touchState.startX;
+          const dy = t.clientY - touchState.startY;
+          if (Math.hypot(dx, dy) > 8) {
+            touchState.moved = true;
+          }
+          sendGuestPointer(t.clientX, t.clientY, false);
+          // Scroll Netscape with Up/Down arrow scancodes when swiping vertically
+          const stepY = t.clientY - touchState.lastY;
+          if (Math.abs(stepY) >= 24) {
+            touchState.lastY = t.clientY;
+            if (stepY < 0) {
+              // Swipe up -> scroll down (Down Arrow E0 50)
+              emulator.keyboard_send_scancodes([0xe0, 0x50, 0xe0, 0xd0]);
+            } else {
+              // Swipe down -> scroll up (Up Arrow E0 48)
+              emulator.keyboard_send_scancodes([0xe0, 0x48, 0xe0, 0xc8]);
+            }
+          }
+        }
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    screenContainer.addEventListener(
+      "touchend",
+      (e) => {
+        if (touchState && !touchState.moved) {
+          pointerButtons[0] = true;
+          sendGuestPointer(touchState.startX, touchState.startY, true);
+          setTimeout(() => {
+            pointerButtons[0] = false;
+            sendGuestPointer(touchState.startX, touchState.startY, true);
+          }, 45);
+        }
+        touchState = null;
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    // Overall progress across every downloaded file.
+    const downloads = new Map();
+    emulator.add_listener("download-progress", (e) => {
+      if (e && e.total > 0) {
+        downloads.set(e.file_index, e);
+        let loaded = 0, total = 0;
+        for (const d of downloads.values()) {
+          loaded += d.loaded;
+          total += d.total;
+        }
+        powerProgress.style.width = `${Math.min(100, (loaded / total) * 100)}%`;
+      }
+    });
+
+    // =========================================================================
+    // 3. Automatic Native Resolution Sync via COM1 -> RESCHG.EXE
+    // =========================================================================
+    // The guest's mode for the viewport, up to the snapshot mode's pixel count.
+    const [snapshotW, snapshotH] = guestDisplay.snapshotMode;
+    const MAX_GUEST_PIXELS = snapshotW * snapshotH;
+
+    const monitorFrame = document.getElementById("monitor-frame");
+    let powered = false;
+    // RESCHG.EXE listens on COM1 in the saved state: the generator only emits modes.json
+    // after seeing it ready before the snapshot, and it resets the UART when it starts.
+    if (guestDisplay.reschgInState !== true) throw new Error("modes.json: RESCHG.EXE is not running in the saved state");
+    let requestedMode = null;
+
+    // The frame always takes the guest screen's own aspect ratio, so pixels stay square.
+    emulator.add_listener("screen-set-size", ([w, h, bpp]) => {
+      if (bpp === 0) return; // text mode: columns and rows
+      monitorFrame.style.width = `min(100vw, calc(100vh * ${w} / ${h}))`;
+      monitorFrame.style.height = `min(100vh, calc(100vw * ${h} / ${w}))`;
+    });
+
+    function syncGuestResolution() {
+      if (!powered) return;
+      const [w, h] = pickGuestMode(guestDisplay.modes, MAX_GUEST_PIXELS, window.innerWidth, window.innerHeight);
+      if (requestedMode && requestedMode[0] === w && requestedMode[1] === h) return;
+      requestedMode = [w, h];
+      emulator.serial0_send(`RES ${w} ${h}\n`);
+    }
+
+    // RESCHG.EXE answers each switch with RESCHG_OK or RESCHG_ERR.
+    let serialLine = "";
+    emulator.add_listener("serial0-output-byte", (byte) => {
+      const c = String.fromCharCode(byte);
+      if (c !== "\n") {
+        serialLine += c;
+        return;
+      }
+      const line = serialLine;
+      serialLine = "";
+      if (line === "RESCHG_ERR") {
+        console.error(`RESCHG.EXE could not switch the guest to ${requestedMode.join("x")}`);
+      }
+    });
+
+    function scheduleResolutionSync() {
+      clearTimeout(scheduleResolutionSync.timer);
+      scheduleResolutionSync.timer = setTimeout(syncGuestResolution, 180);
+    }
+    window.addEventListener("resize", scheduleResolutionSync);
+
+    emulator.add_listener("emulator-loaded", () => {
+      powerProgress.style.width = "100%";
+      powerButton.disabled = false;
+    });
+
+    // The press itself must run the emulator so the user activation unlocks audio.
+    powerButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      powerScreen.hidden = true;
+      emulator.speaker_adapter.dac.enabled = true;
+      emulator.run();
+      powered = true;
+      syncGuestResolution();
+    });
+  </script>
 </body>
 </html>
