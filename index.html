@@ -5,15 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Lexo Liu — Windows 95 + Netscape Navigator 3.0 (lexo.cool)</title>
   <style>
-    :root {
-      --win-gray: #c0c0c0;
-      --win-dark: #808080;
-      --win-darker: #404040;
-      --win-light: #ffffff;
-      --win-navy: #000080;
-      --win-teal: #008080;
-    }
-
     * {
       box-sizing: border-box;
       margin: 0;
@@ -74,190 +65,74 @@
       cursor: none;
     }
 
-    /* Retro BIOS / Snapshot Loading Screen */
-    #boot-splash {
-      position: absolute;
+    /* Power button overlay */
+    #power-screen {
+      position: fixed;
       inset: 0;
       z-index: 25;
-      background: #000000;
-      color: #c0c0c0;
-      font-family: "Courier New", Courier, monospace;
-      padding: 28px 36px;
+      background: #000;
       display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      transition: opacity 0.35s ease;
-    }
-
-    #boot-splash.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .bios-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 1px solid #333;
-      padding-bottom: 14px;
-    }
-
-    .bios-title {
-      font-size: 15px;
-      line-height: 1.45;
-      color: #d8d8d8;
-    }
-
-    .bios-title strong {
-      color: #ffffff;
-    }
-
-    .energy-badge {
-      border: 1px solid #808000;
-      padding: 6px 10px;
-      color: #ffff55;
-      font-size: 12px;
-      text-align: right;
-      line-height: 1.3;
-    }
-
-    .bios-log {
-      font-size: 14px;
-      line-height: 1.65;
-      color: #b8b8b8;
-      margin: 18px 0;
-      flex: 1;
-    }
-
-    .bios-log .ok {
-      color: #55ff55;
-    }
-
-    .bios-log .hi {
-      color: #ffffff;
-    }
-
-    .win95-loader-box {
-      background: var(--win-gray);
-      color: #000;
-      border-top: 2px solid var(--win-light);
-      border-left: 2px solid var(--win-light);
-      border-right: 2px solid var(--win-darker);
-      border-bottom: 2px solid var(--win-darker);
-      padding: 3px;
-      max-width: 520px;
-      width: 100%;
-      margin: 0 auto 24px auto;
-      font-family: "MS Sans Serif", "Tahoma", sans-serif;
-      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.65);
-    }
-
-    .win95-titlebar {
-      background: linear-gradient(90deg, #000080, #1084d0);
-      color: #fff;
-      font-weight: bold;
-      font-size: 12px;
-      padding: 3px 6px;
-      display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: center;
+      padding: 0 16px;
     }
 
-    .win95-body {
-      padding: 14px 16px;
-      font-size: 12px;
+    #power-screen[hidden] {
+      display: none;
     }
 
-    .win95-status-row {
+    #power-button {
+      width: 72px;
+      height: 72px;
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 2px solid #8a8a8a;
+      border-radius: 50%;
+      color: #8a8a8a;
+      cursor: not-allowed;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .win95-progress-well {
-      height: 20px;
-      background: #fff;
-      border-top: 2px solid var(--win-dark);
-      border-left: 2px solid var(--win-dark);
-      border-right: 2px solid var(--win-light);
-      border-bottom: 2px solid var(--win-light);
-      padding: 2px;
-      display: flex;
-      gap: 2px;
+    #power-button:not(:disabled) {
+      border-color: #e0e0e0;
+      color: #e0e0e0;
+      cursor: pointer;
     }
 
-    .win95-progress-fill {
-      height: 100%;
-      width: 8%;
-      background: repeating-linear-gradient(
-        90deg,
-        var(--win-navy) 0px,
-        var(--win-navy) 10px,
-        #fff 10px,
-        #fff 12px
-      );
-      transition: width 0.12s linear;
+    #power-button:focus-visible {
+      outline: 2px solid #e0e0e0;
+      outline-offset: 4px;
     }
 
-    .bios-footer {
-      font-size: 12px;
-      color: #777;
-      border-top: 1px solid #333;
-      padding-top: 10px;
-      display: flex;
-      justify-content: space-between;
+    #power-button svg {
+      width: 32px;
+      height: 32px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    #power-progress {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 2px;
+      width: 0;
+      background: #e0e0e0;
     }
   </style>
 </head>
 <body>
   <div id="app">
     <div id="monitor-frame">
-      <!-- Retro BIOS + Snapshot Restore Overlay -->
-      <div id="boot-splash">
-        <div class="bios-header">
-          <div class="bios-title">
-            <strong>Award Modular BIOS v4.51PG, An Energy Star Ally</strong><br />
-            Copyright (C) 1984-96, Award Software, Inc.<br />
-            LEXO-PC i440BX WebAssembly x86 Virtual Machine
-          </div>
-          <div class="energy-badge">
-            ENERGY STAR<br />
-            <strong>EPA POLLUTION PREVENTER</strong>
-          </div>
-        </div>
-
-        <div class="bios-log">
-          <div>Main Processor : <span class="hi">Intel Pentium(R) Pro 100MHz (v86 WebAssembly JIT)</span></div>
-          <div>Memory Test : <span class="hi">65536K OK</span></div>
-          <div>Display Adapter : <span class="hi">VBE SVGA 1024x768x32bpp (8192K VRAM)</span></div>
-          <div>Pointer Device : <span class="ok">VBMOUSE Seamless Absolute Coordinate Driver [1:1 Mode]</span></div>
-          <div>Primary Master : <span class="hi">471MB Windows 95 OSR2 (256KB On-Demand Chunked Disk)</span></div>
-          <div>Primary Slave : <span class="hi">8MB FAT12 Volume [D:\NETSCAPE\NETSCAPE.EXE v3.0]</span></div>
-          <div>Network Adapter : <span class="ok">NE2000 Compatible (IRQ 10, I/O 0x300) -&gt; Host Fetch Relay</span></div>
-          <br />
-          <div id="bios-step-line">Restoring hibernated VM state (<span class="hi">win95-netscape.state.bin.zst</span>)...</div>
-        </div>
-
-        <div class="win95-loader-box">
-          <div class="win95-titlebar">
-            <span>Starting Microsoft Windows 95 &amp; Netscape Navigator 3.0...</span>
-            <span>lexo.cool</span>
-          </div>
-          <div class="win95-body">
-            <div class="win95-status-row">
-              <span id="load-status-text">Downloading compressed memory snapshot...</span>
-              <strong id="load-pct-text">0%</strong>
-            </div>
-            <div class="win95-progress-well">
-              <div id="load-progress-bar" class="win95-progress-fill"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="bios-footer">
-          <span> Seamless Mouse Active (No Pointer Lock required)</span>
-          <span>11/02/1996-i440BX-LEXO-00</span>
-        </div>
+      <div id="power-screen">
+        <button id="power-button" type="button" aria-label="Power on" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
+        </button>
+        <div id="power-progress"></div>
       </div>
 
       <!-- v86 Screen Container -->
@@ -425,10 +300,9 @@ ${bodyContent}
     // =========================================================================
     // 2. Initialize v86 Windows 95 Virtual Machine with Snapshot Restore
     // =========================================================================
-    const bootSplash = document.getElementById("boot-splash");
-    const progressBar = document.getElementById("load-progress-bar");
-    const pctText = document.getElementById("load-pct-text");
-    const statusText = document.getElementById("load-status-text");
+    const powerScreen = document.getElementById("power-screen");
+    const powerButton = document.getElementById("power-button");
+    const powerProgress = document.getElementById("power-progress");
 
     const emulator = new V86({
       wasm_path: "/public/vm/v86.wasm",
@@ -457,7 +331,7 @@ ${bodyContent}
       // The guest's NE2000 driver keeps the MAC from the saved state; without this,
       // v86 randomises the card's MAC on load and drops every frame sent to the guest.
       preserve_mac_from_state_image: true,
-      autostart: true,
+      autostart: false,
     });
 
     window.emulator = emulator;
@@ -661,15 +535,17 @@ ${bodyContent}
       { passive: false }
     );
 
+    // Overall progress across every downloaded file.
+    const downloads = new Map();
     emulator.add_listener("download-progress", (e) => {
       if (e && e.total > 0) {
-        const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
-        progressBar.style.width = `${Math.max(8, pct)}%`;
-        pctText.textContent = `${pct}%`;
-        const fileBase = (e.file_name || "").split("/").pop();
-        if (fileBase) {
-          statusText.textContent = `Loading ${fileBase} (${(e.loaded / 1048576).toFixed(1)} / ${(e.total / 1048576).toFixed(1)} MB)...`;
+        downloads.set(e.file_index, e);
+        let loaded = 0, total = 0;
+        for (const d of downloads.values()) {
+          loaded += d.loaded;
+          total += d.total;
         }
+        powerProgress.style.width = `${Math.min(100, (loaded / total) * 100)}%`;
       }
     });
 
@@ -753,13 +629,16 @@ ${bodyContent}
 
     emulator.add_listener("emulator-loaded", () => {
       vmLoaded = true;
-      progressBar.style.width = "100%";
-      pctText.textContent = "100%";
-      statusText.textContent = "Decompressing x86 CPU & SVGA state...";
+      powerProgress.style.width = "100%";
       syncGuestResolution();
-      setTimeout(() => {
-        bootSplash.classList.add("hidden");
-      }, 250);
+      powerButton.disabled = false;
+    });
+
+    // The press itself must run the emulator so the user activation unlocks audio.
+    powerButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      powerScreen.hidden = true;
+      emulator.run();
     });
   </script>
 </body>
