@@ -2,7 +2,7 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { CHUNK_SIZE, DISK_SIZE, chunkNames, partNames } from "./hda.ts";
-import type { FilePatch } from "./patches.ts";
+import type { FileAdd, FilePatch } from "./patches.ts";
 
 const SECTOR = 512;
 
@@ -43,8 +43,12 @@ interface FatLayout {
   clusterBytes: number;
   /** The first FAT, [start, end). */
   fat: [number, number];
+  /** The root directory, [start, end). */
+  root: [number, number];
   /** The first byte of cluster 2. */
   data: number;
+  /** Clusters in the data area. */
+  clusters: number;
 }
 
 async function fatLayout(image: string): Promise<FatLayout> {
@@ -56,12 +60,102 @@ async function fatLayout(image: string): Promise<FatLayout> {
   const rootEntries = bpb.getUint16(17, true);
   const sectorsPerFat = bpb.getUint16(22, true);
   if (sectorsPerFat === 0) throw new Error(`${image}: FAT32 is not supported`);
+  const totalSectors = bpb.getUint16(19, true) || bpb.getUint32(32, true);
   const fat = part + reserved * bytesPerSector;
+  const root = fat + fats * sectorsPerFat * bytesPerSector;
+  const data = root + rootEntries * 32;
+  const clusterBytes = bpb.getUint8(13) * bytesPerSector;
   return {
     part,
-    clusterBytes: bpb.getUint8(13) * bytesPerSector,
+    clusterBytes,
     fat: [fat, fat + sectorsPerFat * bytesPerSector],
-    data: fat + fats * sectorsPerFat * bytesPerSector + rootEntries * 32,
+    root: [root, data],
+    data,
+    clusters: Math.floor((part + totalSectors * bytesPerSector - data) / clusterBytes),
+  };
+}
+
+/** Which file of a disk image's first partition holds each of its blocks. */
+export interface DiskFiles {
+  /** The file (or directory, or the partition's FAT or root directory) holding `block`. */
+  fileOf(block: number): string | undefined;
+  /** Every block of `file`. */
+  blocksOf(file: string): number[];
+}
+
+/**
+ * Maps the blocks of `blockSize` bytes of `image` to the files of its first partition (a FAT12
+ * or FAT16 file system, 8.3 names), from its directory tree and the cluster chains in its FAT.
+ */
+export async function diskFiles(image: string, blockSize: number): Promise<DiskFiles> {
+  const { clusterBytes, fat, root, data, clusters } = await fatLayout(image);
+  if (clusterBytes % blockSize !== 0 || data % blockSize !== 0 || root[0] % blockSize !== 0) {
+    throw new Error(`${image}: the file system is not aligned to ${blockSize}-byte blocks`);
+  }
+  const bytes = await Bun.file(image).bytes();
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // FAT12 has fewer than 4085 clusters (Microsoft's FAT specification).
+  const fat12 = clusters < 4085;
+  const next = (c: number) => {
+    if (!fat12) return view.getUint16(fat[0] + 2 * c, true);
+    const v = view.getUint16(fat[0] + Math.floor((3 * c) / 2), true);
+    return c & 1 ? v >> 4 : v & 0xfff;
+  };
+  const end = fat12 ? 0xff8 : 0xfff8;
+  const chain = (first: number) => {
+    const out: number[] = [];
+    for (let c = first; c >= 2 && c < end; c = next(c)) {
+      if (out.length > clusters) throw new Error(`${image}: the cluster chain from ${first} loops`);
+      out.push(c);
+    }
+    return out;
+  };
+
+  const owner = new Int32Array(Math.ceil(bytes.length / blockSize)).fill(-1);
+  const names: string[] = [];
+  const blocks: number[][] = [];
+  const own = (name: string, ranges: [number, number][]) => {
+    const id = names.push(name) - 1;
+    blocks.push([]);
+    for (const [start, stop] of ranges) {
+      for (let b = start / blockSize; b < stop / blockSize; b++) {
+        owner[b] = id;
+        blocks[id].push(b);
+      }
+    }
+  };
+  const clusterRanges = (cs: number[]): [number, number][] =>
+    cs.map((c) => [data + (c - 2) * clusterBytes, data + (c - 1) * clusterBytes]);
+  own("<FAT>", [fat]);
+  own("/", [root]);
+  const walk = (dir: string, ranges: [number, number][]) => {
+    for (const [start, stop] of ranges) {
+      for (let e = start; e < stop; e += 32) {
+        const first = bytes[e];
+        if (first === 0) return;
+        const attr = bytes[e + 11];
+        if (first === 0xe5 || attr === 0x0f || attr & 0x08) continue; // deleted, long name, volume label
+        const base = Buffer.from(bytes.subarray(e, e + 8)).toString("latin1").trimEnd();
+        if (base === "." || base === "..") continue;
+        const ext = Buffer.from(bytes.subarray(e + 8, e + 11)).toString("latin1").trimEnd();
+        const path = `${dir}${base}${ext ? `.${ext}` : ""}`;
+        const cs = chain(view.getUint16(e + 26, true));
+        if (cs.length === 0) continue;
+        const extents = clusterRanges(cs);
+        own(attr & 0x10 ? `${path}/` : path, extents);
+        if (attr & 0x10) walk(`${path}/`, extents);
+      }
+    }
+  };
+  walk("/", [root]);
+  const ids = new Map(names.map((n, i) => [n, i]));
+  return {
+    fileOf: (block) => (owner[block] >= 0 ? names[owner[block]] : undefined),
+    blocksOf(file) {
+      const id = ids.get(file);
+      if (id === undefined) throw new Error(`${image}: no file ${file}`);
+      return blocks[id];
+    },
   };
 }
 
@@ -131,9 +225,10 @@ export async function buildHdb(out: string, rootDir: string, label: string): Pro
 
 /**
  * Writes the C: chunks to `outDir`: the base chunks from `baseDir` with `patches` applied
- * to files in the first partition. `workDir` receives the assembled image.
+ * to files in the first partition and `added` copied into it. `workDir` receives the
+ * assembled image.
  */
-export async function buildHda(baseDir: string, outDir: string, workDir: string, patches: FilePatch[]): Promise<void> {
+export async function buildHda(baseDir: string, outDir: string, workDir: string, patches: FilePatch[], added: FileAdd[]): Promise<void> {
   const image = join(workDir, "c.img");
   const assembled = new Uint8Array(DISK_SIZE);
   await Promise.all(
@@ -148,6 +243,15 @@ export async function buildHda(baseDir: string, outDir: string, workDir: string,
     await Bun.write(local, patch.apply(await Bun.file(local).bytes()));
     await mtools("mcopy", ["-o", "-i", part, local, `::${patch.path}`]);
     console.log(`hda: patched ${patch.path} (${patch.why})`);
+  }
+  for (const file of added) {
+    const exists = await run(["mdir", "-b", "-i", part, `::${file.path}`], { env: MTOOLS_ENV }).then(
+      () => true,
+      () => false,
+    );
+    if (exists) throw new Error(`hda: ${file.path} is already in the base image`);
+    await mtools("mcopy", ["-i", part, file.from, `::${file.path}`]);
+    console.log(`hda: added ${file.path} (${file.why})`);
   }
 
   await writeParts(image, outDir, CHUNK_SIZE);
