@@ -61,7 +61,7 @@ const SB16_SECTION = "[sndblst.drv]";
 export const cDrivePatches: FilePatch[] = [
   {
     path: "/AUTOEXEC.BAT",
-    why: "import D:\\NETSCAPE.REG (Run keys, Netscape and display settings) before Windows starts",
+    why: "import D:\\NETSCAPE.REG (Run and RunServices keys, Netscape and display settings) before Windows starts",
     apply(content) {
       const text = Buffer.from(content).toString("latin1");
       if (text.includes(REGEDIT_IMPORT)) throw new Error("AUTOEXEC.BAT already imports NETSCAPE.REG");
