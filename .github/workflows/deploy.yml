@@ -13,8 +13,11 @@ jobs:
       contents: read
       deployments: write
     steps:
+      # Full history: the sitemap's lastmod is the date of index.html's last commit.
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # The generated VM assets depend only on what the generator reads: its sources, the guest
       # pages Netscape renders, the display picker, and this workflow's toolchain versions.
