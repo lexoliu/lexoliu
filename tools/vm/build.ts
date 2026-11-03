@@ -1,6 +1,7 @@
 // Generates every VM asset the page loads from /public/vm, from pinned and hash-verified
 // inputs: v86, its BIOSes (patched), the C: chunks (patched), the D: chunks, the guest's
-// display modes and the saved state, which carries the disk blocks the boot after it reads.
+// display modes, the saved state, which carries the disk blocks the boot after it reads, and
+// the link-preview image (preview.png), the guest's screen once Netscape rendered the homepage.
 // Usage: bun tools/vm/build.ts [--out DIR] [--cache DIR]
 //   --out    output directory, replaced entirely (default: public/vm)
 //   --cache  verified downloads, reused across runs (default: $XDG_CACHE_HOME/lexoliu-vm)
@@ -12,6 +13,7 @@ import { HDB_CHUNK_SIZE, HDB_SIZE, buildHda, buildHdb, fileExtents, firstFatExte
 import { type ModesFile, bootDisplay, checkAddedModes, checkOptionRomChecksum, guestModes } from "./display.ts";
 import { CHUNK_SIZE, DISK_SIZE, fetchHdaBase } from "./hda.ts";
 import { buildDriveD, buildReschg, buildUnshield } from "./netscape.ts";
+import { previewMode, renderPreview } from "./preview.ts";
 import { VBEMP_PATH, applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
 import { parseWavFormat, snapshotAtStartupSound } from "./snapshot.ts";
 import { fetchSources } from "./sources.ts";
@@ -25,6 +27,7 @@ const REGISTRY_HIVES = ["/WINDOWS/SYSTEM.DAT", "/WINDOWS/USER.DAT"];
 const STATE_FILE = "win95-netscape.state.bin.zst";
 const STATE_ZSTD_LEVEL = 19;
 const MODES_FILE = "modes.json";
+const PREVIEW_FILE = "preview.png";
 
 function option(name: string, fallback: string): string {
   const i = process.argv.indexOf(name);
@@ -45,7 +48,7 @@ const work = join(cache, "work");
  * snapshot's pixel count picks that mode, and one at a larger mode's size picks what every
  * viewport of that ratio past the snapshot's pixel count picks.
  */
-function powerOnModes(modes: [number, number][], [sw, sh]: [number, number]): [number, number][] {
+function powerOnModesOf(modes: [number, number][], [sw, sh]: [number, number]): [number, number][] {
   const picked = new Map<string, [number, number]>();
   for (const [w, h] of modes) {
     const mode: [number, number] = pickGuestMode(modes, sw * sh, w, h);
@@ -128,6 +131,7 @@ try {
     await run(["mcopy", "-o", "-i", `${image}@@${await firstPartitionOffset(image)}`, `::${STARTUP_SOUND}`, wav], {
       env: { MTOOLS_SKIP_CHECK: "1" },
     });
+    const powerOnModes = powerOnModesOf(modes.modes, modes.snapshotMode);
     return snapshotAtStartupSound({
       libv86: join(v86Dir, "libv86.mjs"),
       wasm: join(out, "v86.wasm"),
@@ -151,12 +155,17 @@ try {
       },
       startupSound: parseWavFormat(await Bun.file(wav).bytes()),
       screen: modes.snapshotMode,
-      powerOnModes: powerOnModes(modes.modes, modes.snapshotMode),
+      powerOnModes,
+      captureMode: previewMode(powerOnModes),
     });
   });
 
   // Written once the snapshot is taken: it only exists if RESCHG.EXE was running in the state.
   await Bun.write(join(out, MODES_FILE), `${JSON.stringify({ ...modes, reschgInState: true } satisfies ModesFile)}\n`);
+
+  await stage("render preview", async () => {
+    await Bun.write(join(out, PREVIEW_FILE), renderPreview(snapshot.frame));
+  });
 
   await stage("compress state", async () => {
     await Bun.write(join(out, STATE_FILE), await Bun.zstdCompress(snapshot.state, { level: STATE_ZSTD_LEVEL }));
@@ -164,7 +173,7 @@ try {
 
   await rm(work, { recursive: true, force: true });
   for (const [name, s] of timings) console.log(`${name.padEnd(24)} ${s.toFixed(1).padStart(7)} s`);
-  for (const f of ["libv86.js", "v86.wasm", "seabios.bin", "vgabios.bin", MODES_FILE, STATE_FILE]) {
+  for (const f of ["libv86.js", "v86.wasm", "seabios.bin", "vgabios.bin", MODES_FILE, STATE_FILE, PREVIEW_FILE]) {
     console.log(`${f.padEnd(32)} ${Bun.file(join(out, f)).size} bytes`);
   }
   console.log(`state (uncompressed)             ${snapshot.state.length} bytes`);
