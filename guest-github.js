@@ -435,12 +435,21 @@ ${readmeHtml}`,
     const head = (note) => `<P><TABLE WIDTH="100%" BORDER="1" CELLPADDING="3" CELLSPACING="0"><TR><TD BGCOLOR="#C0C0C0"><B>${guestText(entry.name)}</B> <FONT SIZE="-1">${note}</FONT></TD></TR></TABLE>`;
     if (entry.size > MAX_README_BYTES) return `${head(`(${formatBytes(entry.size)}, too large to show here)`)}<P><A HREF="${fileLink}">Open ${guestText(entry.name)}</A>`;
     const text = new TextDecoder().decode(await this.#raw(owner, repo, ref, path));
-    return `${head("")}<TABLE WIDTH="100%" BORDER="0" CELLPADDING="8" CELLSPACING="0"><TR><TD>${this.#markdownBody(text, entry.name, { owner, repo, ref, dir })}</TD></TR></TABLE>`;
+    return `${head("")}<TABLE WIDTH="100%" BORDER="0" CELLPADDING="8" CELLSPACING="0"><TR><TD>${await this.#markdownBody(text, entry.name, { owner, repo, ref, dir })}</TD></TR></TABLE>`;
   }
 
-  #markdownBody(text, name, ctx) {
+  async #markdownBody(text, name, ctx) {
     if (!MARKDOWN_EXTENSIONS.test(name)) return `<PRE>${plainLines(text.replace(/\r\n?/g, "\n")).join("\n")}</PRE>`;
-    return renderMarkdown(text, this.#links(ctx));
+    return this.#markdown(text, ctx);
+  }
+
+  /** Markdown as HTML 3.2, its fenced code blocks highlighted like source pages. */
+  #markdown(text, ctx) {
+    return renderMarkdown(text, this.#links(ctx), async (code, name) => {
+      if (code.length > HIGHLIGHT_MAX_CHARS) return undefined;
+      const lang = await this.#highlighter.languageNamed(name);
+      return lang === undefined ? undefined : this.#highlighter.lines(code, lang);
+    });
   }
 
   /** How a README's links and images map to the guest: GitHub routes inside the repository, raw files for images. */
@@ -512,7 +521,7 @@ ${readmeHtml}`,
     const text = new TextDecoder().decode(bytes);
     const plain = url.searchParams.get("plain") === "1";
     if (MARKDOWN_EXTENSIONS.test(name) && !plain) {
-      return page(`${bar(`${formatBytes(bytes.length)} &nbsp;|&nbsp; Rendered &nbsp;[ <A HREF="${guestText(`${href(here)}?plain=1`)}">Show source</A> ]`)}<TABLE WIDTH="100%" BORDER="0" CELLPADDING="8" CELLSPACING="0"><TR><TD>${renderMarkdown(text, this.#links({ owner, repo: meta.name, ref, dir }))}</TD></TR></TABLE>`);
+      return page(`${bar(`${formatBytes(bytes.length)} &nbsp;|&nbsp; Rendered &nbsp;[ <A HREF="${guestText(`${href(here)}?plain=1`)}">Show source</A> ]`)}<TABLE WIDTH="100%" BORDER="0" CELLPADDING="8" CELLSPACING="0"><TR><TD>${await this.#markdown(text, { owner, repo: meta.name, ref, dir })}</TD></TR></TABLE>`);
     }
 
     const lines = (await this.#sourceLines(`${owner}/${meta.name}@${ref}:${path}`, text, path)).lines;

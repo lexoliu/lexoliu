@@ -28,7 +28,8 @@ export function languageOf(path, languages) {
 export class Highlighter {
   #core;
   #languages;
-  #loaded = new Set();
+  /** Language -> the promise of its grammar being loaded, so concurrent blocks load it once. */
+  #loaded = new Map();
 
   /** Loads the engine, the theme and the language map; the grammars come per file. */
   async #ready() {
@@ -51,13 +52,18 @@ export class Highlighter {
     return languageOf(path, this.#languages);
   }
 
+  /** The Shiki language a Markdown fence names (`rust`, `rs`, `sh`, ...), or undefined when it is none. */
+  async languageNamed(name) {
+    await this.#ready();
+    const lang = name.toLowerCase();
+    return Object.hasOwn(this.#languages, lang) ? lang : undefined;
+  }
+
   /** `code` as lines of HTML 3.2 (text with <FONT COLOR>, <B>, <I>), tabs expanded and escaped. */
   async lines(code, lang) {
     const core = await this.#ready();
-    if (!this.#loaded.has(lang)) {
-      await core.loadLanguage((await this.#languages[lang]()).default);
-      this.#loaded.add(lang);
-    }
+    if (!this.#loaded.has(lang)) this.#loaded.set(lang, (async () => core.loadLanguage((await this.#languages[lang]()).default))());
+    await this.#loaded.get(lang);
     const foreground = core.getTheme(THEME).fg.toLowerCase();
     const rows = core.codeToTokensBase(code, { lang, theme: THEME });
     return rows.map((tokens) => {

@@ -28,8 +28,10 @@ function numeric(value) {
 
 class Walker {
   /** `links` maps hrefs and image sources to the guest's URLs, see GitHubSite. */
-  constructor(links) {
+  /** `fences` holds the highlighted lines of each fenced code block, by the index its <pre> names. */
+  constructor(links, fences) {
     this.links = links;
+    this.fences = fences;
   }
 
   children(node) {
@@ -71,6 +73,7 @@ class Walker {
       case "LI":
         return `<LI>${inner()}\n`;
       case "PRE":
+        if (node.hasAttribute("data-fence")) return `<PRE>${this.fences[Number(node.getAttribute("data-fence"))].join("\n")}</PRE>\n`;
         return `<PRE>${guestText(expandTabs(node.textContent.replace(/\n$/, "")))}</PRE>\n`;
       case "TABLE":
         return `<TABLE BORDER="1" CELLPADDING="3" CELLSPACING="0">${inner()}</TABLE>\n`;
@@ -128,15 +131,31 @@ class Walker {
 /**
  * Markdown -> HTML 3.2. `links.link(href)` returns the guest URL for a link (or undefined to drop
  * the link and keep its text); `links.image(src, width)` the guest URL of an image.
+ * `highlight(code, name)` resolves to the HTML 3.2 lines of a fenced block whose info string
+ * names `name` (its first word, before any comma as in rustdoc's `rust,ignore`), or undefined to
+ * show it plain.
  */
-export function renderMarkdown(source, links) {
-  return renderHtml(new MarkdownIt({ html: true, linkify: true }).render(source), links);
+export async function renderMarkdown(source, links, highlight) {
+  const md = new MarkdownIt({ html: true, linkify: true });
+  const env = {};
+  const tokens = md.parse(source, env);
+  const fenced = tokens.filter((token) => token.type === "fence" && token.info.trim() !== "");
+  const fences = await Promise.all(fenced.map((token) => highlight(token.content.replace(/\n$/, ""), token.info.trim().split(/[\s,]/)[0])));
+  const plainFence = md.renderer.rules.fence;
+  md.renderer.rules.fence = (all, index, options, env_, self) => {
+    const at = fenced.indexOf(all[index]);
+    return at === -1 || fences[at] === undefined ? plainFence(all, index, options, env_, self) : `<pre data-fence="${at}"></pre>\n`;
+  };
+  return renderHtml(md.renderer.render(tokens, md.options, env), links, fences);
 }
 
-/** HTML -> HTML 3.2, with `links` as for renderMarkdown. The text is parsed into an inert document, nothing in it loads. */
-export function renderHtml(html, links) {
+/**
+ * HTML -> HTML 3.2, with `links` as for renderMarkdown and `fences` the highlighted code blocks its
+ * <pre data-fence> elements name. The text is parsed into an inert document, nothing in it loads.
+ */
+export function renderHtml(html, links, fences = []) {
   const doc = new DOMParser().parseFromString(`<body>${html}`, "text/html");
-  return new Walker(links).children(doc.body);
+  return new Walker(links, fences).children(doc.body);
 }
 
 /** The address a README mailto: link asks the visitor's mail client for, as the guest's mail route. */
