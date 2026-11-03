@@ -1,5 +1,5 @@
 // Generates every VM asset the page loads from /public/vm, from pinned and hash-verified
-// inputs: v86, its BIOSes (patched), the C: chunks (patched), the D: chunks, the guest's
+// inputs: v86 (built from source, patched) and its BIOSes (patched), the C: chunks (patched), the D: chunks, the guest's
 // display modes, the saved state, which carries the disk blocks the boot after it reads, and
 // the project logos (baseline JPEG, for Netscape 3.0), the link-preview image (preview.png), the guest's screen once Netscape rendered the homepage.
 // Usage: bun tools/vm/build.ts [--out DIR] [--cache DIR]
@@ -18,6 +18,7 @@ import { previewMode, renderPreview } from "./preview.ts";
 import { VBEMP_PATH, applyBytePatches, cDrivePatches, vgaBiosPatches } from "./patches.ts";
 import { parseWavFormat, snapshotAtStartupSound } from "./snapshot.ts";
 import { fetchSources } from "./sources.ts";
+import { buildV86 } from "./v86.ts";
 
 const ROOT = join(dirname(import.meta.path), "..", "..");
 // HKCU\AppEvents\Schemes\Apps\.Default\SystemStart\.Current in the base image's USER.DAT.
@@ -78,14 +79,9 @@ try {
     Promise.all([fetchSources(join(cache, "sources")), fetchHdaBase(join(cache, "hda"))]),
   );
 
-  const [v86Dir, unshield, reschg] = await stage("build tools", () =>
+  const [v86, unshield, reschg] = await stage("build tools", () =>
     Promise.all([
-      (async () => {
-        const dir = join(work, "v86");
-        await mkdir(dir);
-        await run(["tar", "-xzf", src.v86, "-C", dir]);
-        return join(dir, "package", "build");
-      })(),
+      buildV86(src, work),
       buildUnshield(src, work),
       buildReschg(work),
     ]),
@@ -105,10 +101,10 @@ try {
   );
 
   await stage("copy runtime", async () => {
-    await cp(join(v86Dir, "libv86.js"), join(out, "libv86.js"));
-    await cp(join(v86Dir, "v86.wasm"), join(out, "v86.wasm"));
-    await cp(src.seabios, join(out, "seabios.bin"));
-    const vgabios = applyBytePatches("vgabios.bin", await Bun.file(src.vgabios).bytes(), vgaBiosPatches);
+    await cp(join(v86.build, "libv86.js"), join(out, "libv86.js"));
+    await cp(join(v86.build, "v86.wasm"), join(out, "v86.wasm"));
+    await cp(join(v86.bios, "seabios.bin"), join(out, "seabios.bin"));
+    const vgabios = applyBytePatches("vgabios.bin", await Bun.file(join(v86.bios, "vgabios.bin")).bytes(), vgaBiosPatches);
     checkOptionRomChecksum(vgabios);
     await Bun.write(join(out, "vgabios.bin"), vgabios);
   });
@@ -123,7 +119,7 @@ try {
     });
     const boot = bootDisplay(await Bun.file(join(dirname(import.meta.path), "guest", "netscape.reg")).text());
     const modes = guestModes(await Bun.file(join(out, "vgabios.bin")).bytes(), await Bun.file(drv).bytes(), boot);
-    checkAddedModes(await Bun.file(src.vgabios).bytes(), modes);
+    checkAddedModes(await Bun.file(join(v86.bios, "vgabios.bin")).bytes(), modes);
     console.log(`display modes at ${boot.bitsPerPixel} bpp: ${modes.modes.map(([w, h]) => `${w}x${h}`).join(" ")}`);
     return modes;
   });
@@ -136,7 +132,7 @@ try {
     });
     const powerOnModes = powerOnModesOf(modes.modes, modes.snapshotMode);
     return snapshotAtStartupSound({
-      libv86: join(v86Dir, "libv86.mjs"),
+      libv86: join(v86.build, "libv86.mjs"),
       wasm: join(out, "v86.wasm"),
       seabios: join(out, "seabios.bin"),
       vgabios: join(out, "vgabios.bin"),

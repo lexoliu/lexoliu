@@ -35,6 +35,13 @@ jobs:
         with:
           version: 0.16.0
 
+      # v86 is built from source (tools/vm/v86.ts); the runner's clang, Java and Node do the rest.
+      - name: Set up Rust
+        if: steps.vm-assets.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.0
+
       - name: Install mtools
         if: steps.vm-assets.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mtools
