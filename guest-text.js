@@ -27,6 +27,8 @@ const VERTICAL = new Set([0x2502, 0x2503, 0x2506, 0x2507, 0x250a, 0x250b, 0x254e
 function transliterate(ch, code) {
   const mapped = PUNCTUATION.get(ch);
   if (mapped !== undefined) return mapped;
+  // Invisible format characters (zero-width spaces and joiners, bidi marks, invisible operators) show nothing.
+  if (/^\p{Cf}$/u.test(ch)) return "";
   if (HORIZONTAL.has(code)) return "-";
   if (VERTICAL.has(code)) return "|";
   if (code >= 0x2500 && code <= 0x257f) return "+";

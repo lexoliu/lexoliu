@@ -118,11 +118,22 @@ function github() {
   return githubSite;
 }
 
+// http://en.wikipedia.org/ is answered from Wikipedia's public API (guest-wikipedia.js), loaded when
+// Netscape first asks for it.
+let wikipediaSite;
+function wikipedia() {
+  wikipediaSite ??= import("./guest-wikipedia.js").then(({ WikipediaSite }) => new WikipediaSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
+  return wikipediaSite;
+}
+
 async function guestHttpFetch(input) {
   const parsed = new URL(typeof input === "string" ? input : input.url);
   const host = parsed.hostname.toLowerCase();
   if (host === "github.com" || host === "www.github.com") {
     return (await github()).handle(parsed);
+  }
+  if (host === "en.wikipedia.org" || host === "wikipedia.org" || host === "www.wikipedia.org") {
+    return (await wikipedia()).handle(parsed);
   }
   if (host === "lexo.cool" || host === "www.lexo.cool") {
     const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
