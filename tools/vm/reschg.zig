@@ -95,6 +95,40 @@ extern "user32" fn MoveWindow(hWnd: ?*anyopaque, X: i32, Y: i32, nWidth: i32, nH
 extern "user32" fn ShowWindow(hWnd: ?*anyopaque, nCmdShow: i32) callconv(.winapi) i32;
 extern "user32" fn IsZoomed(hWnd: ?*anyopaque) callconv(.winapi) i32;
 
+extern "user32" fn WindowFromPoint(x: i32, y: i32) callconv(.winapi) ?*anyopaque;
+extern "user32" fn GetParent(hWnd: ?*anyopaque) callconv(.winapi) ?*anyopaque;
+extern "user32" fn GetWindowLongA(hWnd: ?*anyopaque, nIndex: i32) callconv(.winapi) u32;
+extern "user32" fn PostMessageA(hWnd: ?*anyopaque, msg: u32, wParam: usize, lParam: isize) callconv(.winapi) i32;
+
+const GWL_STYLE = -16;
+const WS_CHILD = 0x40000000;
+const WS_HSCROLL = 0x00100000;
+const WS_VSCROLL = 0x00200000;
+const WM_HSCROLL = 0x0114;
+const WM_VSCROLL = 0x0115;
+const SB_LINEUP = 0; // SB_LINELEFT for WM_HSCROLL
+const SB_LINEDOWN = 1; // SB_LINERIGHT for WM_HSCROLL
+const SB_ENDSCROLL = 8;
+
+/// Posts `lines` line scrolls (negative: up or left) to the nearest window at (x, y) or above it
+/// with the scroll bar `bar` (WS_VSCROLL or WS_HSCROLL); posting never waits on the window.
+fn scroll(x: i32, y: i32, lines: i32, bar: u32) void {
+    var h = WindowFromPoint(x, y);
+    while (h != null) {
+        const style = GetWindowLongA(h, GWL_STYLE);
+        if (style & bar != 0) {
+            const msg: u32 = if (bar == WS_VSCROLL) WM_VSCROLL else WM_HSCROLL;
+            const code: usize = if (lines < 0) SB_LINEUP else SB_LINEDOWN;
+            var i: u32 = 0;
+            while (i < @abs(lines)) : (i += 1) _ = PostMessageA(h, msg, code, 0);
+            _ = PostMessageA(h, msg, SB_ENDSCROLL, 0);
+            return;
+        }
+        if (style & WS_CHILD == 0) return;
+        h = GetParent(h);
+    }
+}
+
 /// The desktop to fit Netscape to, and whether its window was found.
 const Fit = extern struct { w: i32, h: i32, found: i32 };
 
@@ -126,6 +160,19 @@ fn fitNetscape(width: u32, height: u32) bool {
     var fit = Fit{ .w = @intCast(width), .h = @intCast(height), .found = 0 };
     _ = EnumWindows(&fitWindowProc, @bitCast(@intFromPtr(&fit)));
     return fit.found != 0;
+}
+
+/// Fills `out` with the signed integers in `text`, in order.
+fn parseInts(text: []const u8, out: []i32) void {
+    var idx: usize = 0;
+    for (out) |*slot| {
+        while (idx < text.len and text[idx] != '-' and (text[idx] < '0' or text[idx] > '9')) : (idx += 1) {}
+        const negative = idx < text.len and text[idx] == '-';
+        if (negative) idx += 1;
+        var v: i32 = 0;
+        while (idx < text.len and text[idx] >= '0' and text[idx] <= '9') : (idx += 1) v = v * 10 + @as(i32, text[idx] - '0');
+        slot.* = if (negative) -v else v;
+    }
 }
 
 /// Idle sleeps between looks for a Netscape window opened after a switch.
@@ -179,6 +226,14 @@ pub export fn WinMainCRTStartup() callconv(.winapi) noreturn {
                             serialWrite("RESCHG_ERR\n");
                         }
                     }
+                } else if (pos >= 8 and std.mem.eql(u8, buf[0..6], "SCROLL")) {
+                    var args = [_]i32{ 0, 0, 0 };
+                    parseInts(buf[6..pos], &args);
+                    scroll(args[0], args[1], args[2], WS_VSCROLL);
+                } else if (pos >= 9 and std.mem.eql(u8, buf[0..7], "HSCROLL")) {
+                    var args = [_]i32{ 0, 0, 0 };
+                    parseInts(buf[7..pos], &args);
+                    scroll(args[0], args[1], args[2], WS_HSCROLL);
                 }
                 pos = 0;
             } else if (pos < 60) {

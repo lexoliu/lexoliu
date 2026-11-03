@@ -460,7 +460,7 @@
     let lastClientX = null;
     let lastClientY = null;
 
-    function sendGuestPointer(clientX, clientY, buttonsChanged, touch = false) {
+    function sendGuestPointer(clientX, clientY, buttonsChanged) {
       if (!emulator || !emulator.bus) return;
       const rect = screenContainer.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -478,7 +478,7 @@
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
       const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
       emulator.bus.send("mouse-absolute", [x, y, rect.width, rect.height]);
-      if (!touch && (dx !== 0 || dy !== 0)) {
+      if (dx !== 0 || dy !== 0) {
         emulator.bus.send("mouse-delta", [dx, -dy]);
       }
       if (buttonsChanged) {
@@ -495,42 +495,174 @@
       }
     }
 
-    // Only the primary touch drives the guest pointer; a long press is a right click.
+    // Touch follows the iPadOS gestures, and only the primary touch counts:
+    //   tap                      left click
+    //   swipe                    scrolls the guest window under the finger (momentum after release)
+    //   long press, lift         right click
+    //   long press, then move    left-button drag from the long-press point
+    // Scrolling goes to RESCHG.EXE over COM1, which finds the scrollable window at the point.
     const LONG_PRESS_MS = 500;
     const LONG_PRESS_SLOP_PX = 8;
+    const SCROLL_LINE_GUEST_PX = 32; // guest pixels Netscape scrolls per line
+    const MOMENTUM_TAU_MS = 325; // velocity decay time constant
+    const MOMENTUM_MIN_GUEST_PX_PER_S = 30;
+    const VELOCITY_WINDOW_MS = 100; // finger samples that define the release velocity
+    let guestSize = null; // [w, h] of the guest screen
     let touchId = null;
-    let longPress = null; // { x, y, timer } pending, { fired: true } once the right click was sent
+    // pending: down, undecided; held: long press fired; drag: long press then moved; scroll: swiped
+    let touch = null; // { mode, x, y, timer, samples, accX, accY }
+    let momentum = null; // { frame, x, y, vx, vy, accX, accY, last } guest px and guest px/s
+    let scrollFrame = null; // animation frame flushing the accumulated scroll
 
-    function clearLongPress() {
-      clearTimeout(longPress?.timer);
-      longPress = null;
+    function guestPoint(clientX, clientY) {
+      const rect = screenContainer.getBoundingClientRect();
+      return [
+        Math.round(((clientX - rect.left) / rect.width) * guestSize[0]),
+        Math.round(((clientY - rect.top) / rect.height) * guestSize[1]),
+      ];
+    }
+
+    function guestPerClientPx() {
+      return guestSize[0] / screenContainer.getBoundingClientRect().width;
+    }
+
+    function clickAt(clientX, clientY, button) {
+      pointerButtons = [false, false, false];
+      sendGuestPointer(clientX, clientY, false);
+      pointerButtons[button] = true;
+      sendGuestPointer(clientX, clientY, true);
+      pointerButtons[button] = false;
+      sendGuestPointer(clientX, clientY, true);
+    }
+
+    // Moves `acc` (guest px, positive scrolls down or right) into whole lines for the command.
+    function sendScroll(command, gx, gy, acc) {
+      const lines = Math.trunc(acc / SCROLL_LINE_GUEST_PX);
+      if (lines !== 0) emulator.serial0_send(`${command} ${gx} ${gy} ${lines}\n`);
+      return acc - lines * SCROLL_LINE_GUEST_PX;
+    }
+
+    function flushScroll() {
+      scrollFrame = null;
+      const [gx, gy] = guestPoint(touch.startX, touch.startY);
+      touch.accY = sendScroll("SCROLL", gx, gy, touch.accY);
+      touch.accX = sendScroll("HSCROLL", gx, gy, touch.accX);
+    }
+
+    function stopMomentum() {
+      if (!momentum) return;
+      cancelAnimationFrame(momentum.frame);
+      momentum = null;
+    }
+
+    function stepMomentum(now) {
+      const m = momentum;
+      const dt = now - m.last;
+      m.last = now;
+      const decay = Math.exp(-dt / MOMENTUM_TAU_MS);
+      m.vx *= decay;
+      m.vy *= decay;
+      if (Math.hypot(m.vx, m.vy) < MOMENTUM_MIN_GUEST_PX_PER_S) {
+        momentum = null;
+        return;
+      }
+      m.accX = sendScroll("HSCROLL", m.x, m.y, m.accX - (m.vx * dt) / 1000);
+      m.accY = sendScroll("SCROLL", m.x, m.y, m.accY - (m.vy * dt) / 1000);
+      m.frame = requestAnimationFrame(stepMomentum);
+    }
+
+    // Starts momentum from the finger's velocity over the last VELOCITY_WINDOW_MS, in guest px/s.
+    function startMomentum(t, now) {
+      const recent = t.samples.filter((s) => now - s.t <= VELOCITY_WINDOW_MS);
+      if (recent.length < 2) return;
+      const first = recent[0];
+      const last = recent[recent.length - 1];
+      const seconds = (last.t - first.t) / 1000;
+      if (seconds <= 0) return;
+      const k = guestPerClientPx();
+      const [x, y] = guestPoint(t.startX, t.startY);
+      momentum = {
+        x,
+        y,
+        vx: ((last.x - first.x) * k) / seconds,
+        vy: ((last.y - first.y) * k) / seconds,
+        accX: t.accX,
+        accY: t.accY,
+        last: now,
+      };
+      momentum.frame = requestAnimationFrame(stepMomentum);
+    }
+
+    function touchDown(e) {
+      stopMomentum();
+      touchId = e.pointerId;
+      screenContainer.setPointerCapture(e.pointerId);
+      // The guest must have the pointer at the finger before a button event reaches it, or it
+      // presses where the pointer was; the time until the tap, long press or drag covers that.
+      sendGuestPointer(e.clientX, e.clientY, false);
+      touch = { mode: "pending", x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, accX: 0, accY: 0, samples: [] };
+      touch.timer = setTimeout(() => {
+        touch.mode = "held";
+      }, LONG_PRESS_MS);
+    }
+
+    function touchMove(e) {
+      const t = touch;
+      const moved = Math.hypot(e.clientX - t.startX, e.clientY - t.startY) > LONG_PRESS_SLOP_PX;
+      if (t.mode === "pending" && moved) {
+        clearTimeout(t.timer);
+        t.mode = "scroll";
+      } else if (t.mode === "held" && moved) {
+        t.mode = "drag";
+        sendGuestPointer(t.startX, t.startY, false);
+        pointerButtons[0] = true;
+        sendGuestPointer(t.startX, t.startY, true);
+      }
+      if (t.mode === "drag") {
+        sendGuestPointer(e.clientX, e.clientY, false);
+      } else if (t.mode === "scroll") {
+        const k = guestPerClientPx();
+        t.accX -= (e.clientX - t.x) * k;
+        t.accY -= (e.clientY - t.y) * k;
+        t.samples.push({ t: e.timeStamp, x: e.clientX, y: e.clientY });
+        scrollFrame ??= requestAnimationFrame(flushScroll);
+      }
+      t.x = e.clientX;
+      t.y = e.clientY;
+    }
+
+    function touchEnd(e) {
+      const t = touch;
+      touchId = null;
+      touch = null;
+      clearTimeout(t.timer);
+      if (scrollFrame !== null) {
+        cancelAnimationFrame(scrollFrame);
+        scrollFrame = null;
+      }
+      if (e.type === "pointercancel") {
+        releaseAllPointerButtons();
+        return;
+      }
+      if (t.mode === "pending") {
+        clickAt(e.clientX, e.clientY, 0);
+      } else if (t.mode === "held") {
+        clickAt(t.startX, t.startY, 2);
+      } else if (t.mode === "drag") {
+        pointerButtons[0] = false;
+        sendGuestPointer(e.clientX, e.clientY, true);
+      } else {
+        t.x = e.clientX;
+        t.y = e.clientY;
+        startMomentum(t, e.timeStamp);
+      }
     }
 
     screenContainer.addEventListener("pointerdown", (e) => {
       window.focus();
       e.preventDefault();
       if (e.pointerType === "touch") {
-        if (!e.isPrimary) return;
-        touchId = e.pointerId;
-        screenContainer.setPointerCapture(e.pointerId);
-        sendGuestPointer(e.clientX, e.clientY, false, true);
-        pointerButtons[0] = true;
-        sendGuestPointer(e.clientX, e.clientY, true, true);
-        const { clientX: x, clientY: y } = e;
-        longPress = {
-          x,
-          y,
-          timer: setTimeout(() => {
-            // Replace the held left press with a right click at the same spot.
-            pointerButtons = [false, false, false];
-            sendGuestPointer(x, y, true, true);
-            pointerButtons = [false, false, true];
-            sendGuestPointer(x, y, true, true);
-            pointerButtons = [false, false, false];
-            sendGuestPointer(x, y, true, true);
-            longPress = { fired: true };
-          }, LONG_PRESS_MS),
-        };
+        if (e.isPrimary) touchDown(e);
         return;
       }
       screenContainer.setPointerCapture(e.pointerId);
@@ -542,11 +674,7 @@
 
     screenContainer.addEventListener("pointermove", (e) => {
       if (e.pointerType === "touch") {
-        if (e.pointerId !== touchId || longPress?.fired) return;
-        if (longPress && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > LONG_PRESS_SLOP_PX) {
-          clearLongPress();
-        }
-        sendGuestPointer(e.clientX, e.clientY, false, true);
+        if (e.pointerId === touchId) touchMove(e);
         return;
       }
       // Sync button state from e.buttons bitmask in case the release happened outside the window
@@ -563,14 +691,7 @@
 
     function endPointer(e) {
       if (e.pointerType === "touch") {
-        if (e.pointerId !== touchId) return;
-        touchId = null;
-        const fired = longPress?.fired;
-        clearLongPress();
-        if (!fired) {
-          pointerButtons[0] = false;
-          sendGuestPointer(e.clientX, e.clientY, true, true);
-        }
+        if (e.pointerId === touchId) touchEnd(e);
         return;
       }
       if (e.type === "pointercancel") {
@@ -637,6 +758,7 @@
     // The frame always takes the guest screen's own aspect ratio, so pixels stay square.
     emulator.add_listener("screen-set-size", ([w, h, bpp]) => {
       if (bpp === 0) return; // text mode: columns and rows
+      guestSize = [w, h];
       monitorFrame.style.width = `min(100dvw, calc(100dvh * ${w} / ${h}))`;
       monitorFrame.style.height = `min(100dvh, calc(100dvw * ${h} / ${w}))`;
     });
