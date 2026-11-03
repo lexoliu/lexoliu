@@ -11,6 +11,10 @@ test("punctuation outside Latin-1 gets its ASCII spelling", () => {
   expect(guestText("┌─┐\n│ │\n└─┘")).toBe("+-+\n| |\n+-+");
 });
 
+test("invisible format characters vanish", () => {
+  expect(guestText("a​b⁡c‎d")).toBe("abcd");
+});
+
 test("Latin-1 and unmappable characters are unchanged", () => {
   expect(guestText("café <&>")).toBe("caf&#233; &lt;&amp;&gt;");
   expect(guestText("hi \u{1F600}!")).toBe("hi ?!");
