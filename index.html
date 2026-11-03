@@ -123,6 +123,93 @@
       width: 0;
       background: #e0e0e0;
     }
+
+    /* "click it" doodle pointing at the power button; shown once the button enables. */
+    .power-hint {
+      position: absolute;
+      overflow: visible;
+      pointer-events: none;
+      opacity: 0;
+      color: #e0e0e0;
+    }
+
+    .power-hint path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.5px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .power-hint text {
+      font-family: "Nothing You Could Do", cursive;
+      font-size: 46px;
+      fill: currentColor;
+    }
+
+    /* Landscape: the doodle sits up-left, its arrow tip (the viewBox's bottom-right) at the button's edge. */
+    .power-hint--landscape {
+      right: calc(50% + 28px);
+      bottom: calc(50% + 28px);
+      --hint-w: min(clamp(200px, 24vw, 420px), calc(50vw - 44px), calc((50vh - 44px) * 1.5));
+      width: var(--hint-w);
+      aspect-ratio: 3 / 2;
+    }
+
+    /* Portrait: the doodle sits above, its arrow tip (the viewBox's bottom-centre) at the button's top. */
+    .power-hint--portrait {
+      display: none;
+      left: 50%;
+      bottom: calc(50% + 42px);
+      transform: translateX(-50%);
+      --hint-w: min(clamp(200px, 56vw, 360px), calc(100vw - 32px), calc((50vh - 58px) * 0.8));
+      width: var(--hint-w);
+      aspect-ratio: 4 / 5;
+    }
+
+    @media (orientation: portrait) {
+      .power-hint--landscape {
+        display: none;
+      }
+
+      .power-hint--portrait {
+        display: block;
+      }
+    }
+
+    #power-button:not(:disabled) ~ .power-hint {
+      opacity: 1;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      #power-button:not(:disabled) ~ .power-hint text {
+        animation: power-hint-fade 0.5s ease-out both;
+      }
+
+      /* A non-scaling stroke dashes in screen pixels, so each path's --k (its length over the
+         viewBox width) times the rendered width is its on-screen length. The gap outlasts the
+         path, so no dash (or its round cap) shows before the draw starts. */
+      #power-button:not(:disabled) ~ .power-hint path {
+        --dash: calc(var(--hint-w) * var(--k));
+        stroke-dasharray: var(--dash) calc(var(--dash) * 2);
+        animation: power-hint-draw 1.1s cubic-bezier(0.45, 0, 0.3, 1) 0.4s both;
+      }
+
+      #power-button:not(:disabled) ~ .power-hint .power-hint-head {
+        animation-duration: 0.25s;
+        animation-delay: 1.5s;
+      }
+    }
+
+    @keyframes power-hint-fade {
+      from { opacity: 0; }
+    }
+
+    @keyframes power-hint-draw {
+      from { stroke-dashoffset: calc(var(--dash) * 1.05); }
+      to { stroke-dashoffset: 0; }
+    }
   </style>
 </head>
 <body>
@@ -132,6 +219,17 @@
         <button id="power-button" type="button" aria-label="Power on" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
         </button>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&amp;display=swap&amp;text=click%20it" />
+        <svg class="power-hint power-hint--landscape" viewBox="0 0 300 200" aria-hidden="true">
+          <text transform="translate(6 52) rotate(-9)">click it</text>
+          <path style="--k: 1.36" d="M121 75C122 75 123 76 123 76C124 77 125 77 126 78C126 78 127 78 128 79C128 79 129 80 130 80C130 81 131 81 132 81C133 82 133 82 135 83C136 84 138 85 140 85C142 86 144 87 146 88C149 89 152 89 154 90C157 90 160 90 162 90C165 90 168 90 170 89C172 89 174 88 176 87C178 86 179 85 180 83C181 82 181 81 181 79C181 78 181 76 181 75C180 74 180 73 179 71C178 70 177 69 176 68C175 68 174 67 173 66C172 66 171 65 170 65C169 65 167 65 166 66C166 66 165 67 164 67C163 68 163 69 162 70C162 72 162 73 162 75C162 76 162 78 163 80C164 81 164 83 165 85C166 87 168 89 169 91C171 93 172 96 174 97C176 99 178 101 181 103C183 105 185 107 187 108C190 110 192 111 195 112C197 113 200 114 202 115C205 116 207 117 209 117C211 117 214 118 216 118C218 117 219 117 221 117C223 116 224 116 225 115C226 114 227 114 228 113C229 112 229 111 229 110C230 109 230 107 229 106C229 105 229 104 228 103C228 102 227 101 226 101C225 100 224 99 223 99C222 98 221 98 220 98C219 98 218 98 217 98C216 99 215 99 214 100C213 101 213 101 212 103C212 104 211 105 211 106C211 108 211 110 211 111C211 113 212 115 213 117C213 119 214 121 215 123C216 125 218 127 219 129C221 131 223 133 224 135C226 137 228 139 230 140C232 142 234 144 237 145C239 146 241 148 243 149C246 150 248 151 250 151C252 152 254 152 256 153C258 153 260 153 261 153C263 153 265 153 266 152C267 152 268 151 269 151C270 150 271 149 271 148C271 148 272 147 272 146C272 145 272 144 271 143C271 142 271 142 270 141C269 140 269 140 268 139C267 139 266 138 265 138C264 138 263 138 262 138C262 138 261 138 260 139C259 139 258 140 258 141C258 143 257 144 257 146C257 147 257 149 258 151C258 153 259 155 260 157C261 159 262 162 263 164C264 166 266 167 267 169C268 171 270 172 271 174C272 175 273 176 274 177C275 178 276 178 276 179C277 179 278 180 278 180C279 181 280 181 280 182C281 182 281 183 282 184C283 184 283 185 284 185C285 186 285 186 286 186C287 187 287 187 288 188C289 188 289 189 290 189C291 190 291 190 292 191C293 191 294 191 294 192C295 193 295 195 295 195"/>
+          <path class="power-hint-head" style="--k: 0.11" d="M291 178Q294 186 295 195Q287 193 281 189"/>
+        </svg>
+        <svg class="power-hint power-hint--portrait" viewBox="0 0 240 300" aria-hidden="true">
+          <text transform="translate(30 50) rotate(-7)">click it</text>
+          <path style="--k: 1.64" d="M157 80C157 80 157 81 156 82C156 83 156 84 155 84C155 85 155 86 155 87C154 88 154 88 154 89C153 90 153 91 153 92C153 93 152 93 152 95C152 96 152 98 151 100C151 102 151 105 151 107C151 110 152 113 152 115C152 118 153 121 154 123C155 125 156 127 157 129C158 131 159 132 160 133C161 134 163 135 164 135C165 135 166 135 167 135C167 134 168 133 169 132C169 131 170 130 170 129C170 128 170 127 170 125C170 124 170 123 169 121C169 120 168 119 168 118C167 117 166 116 165 115C164 114 163 114 162 114C160 113 159 113 158 113C156 114 155 114 153 115C152 116 150 117 149 118C147 119 146 121 144 122C143 124 141 126 140 128C139 131 138 133 137 136C136 138 135 141 134 144C133 146 133 149 132 152C132 155 132 158 132 160C132 163 132 166 132 168C132 171 132 173 133 175C133 177 134 179 135 181C135 183 136 184 137 186C138 187 139 188 140 189C141 190 142 190 142 190C143 191 144 191 145 190C146 190 147 190 147 189C148 189 148 188 149 187C149 186 149 185 149 184C150 183 150 182 149 181C149 180 149 179 148 178C148 177 147 176 146 175C146 174 145 174 144 173C143 173 142 173 140 173C139 173 138 173 137 174C136 174 134 175 133 176C132 177 130 178 129 180C128 181 127 183 125 185C124 187 123 189 122 191C121 193 121 196 120 198C119 201 119 203 118 206C118 208 118 211 117 214C117 216 117 219 118 221C118 224 118 226 119 228C119 230 120 233 120 234C121 236 122 238 123 240C123 241 124 242 125 243C126 244 127 245 128 246C129 246 130 247 131 247C132 247 133 247 134 247C134 246 135 246 136 245C136 245 137 244 137 243C138 243 138 242 138 241C138 240 138 239 138 239C138 238 138 237 138 237C137 236 137 235 136 235C136 235 135 235 134 235C133 235 132 235 131 236C130 237 128 238 127 239C126 241 125 242 124 244C123 246 122 248 121 250C120 252 119 254 119 256C118 258 118 260 118 261C118 263 118 265 118 266C118 267 118 268 118 269C119 270 119 271 119 272C119 272 119 273 120 274C120 275 120 276 120 277C120 278 120 279 121 280C121 280 121 281 121 282C121 283 121 284 121 285C121 286 121 287 122 288C122 288 122 289 122 290C122 291 122 292 122 293C122 294 120 295 120 295"/>
+          <path class="power-hint-head" style="--k: 0.14" d="M131 282Q127 288 120 295Q117 289 117 280"/>
+        </svg>
         <div id="power-progress"></div>
       </div>
 
