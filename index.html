@@ -127,17 +127,22 @@
       align-items: center;
       justify-content: center;
       background: none;
-      border: 2px solid #8a8a8a;
+      position: relative;
+      border: 2px solid #3a3a3a;
       border-radius: 50%;
       color: #8a8a8a;
-      cursor: not-allowed;
+      cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
 
-    #power-button:not(:disabled) {
+    /* The button's border is the dim track while loading; the ring over it fills with the download. */
+    #power-screen[data-state="ready"] #power-button {
       border-color: #e0e0e0;
       color: #e0e0e0;
-      cursor: pointer;
+    }
+
+    #power-screen[data-state="pending"] #power-button {
+      color: #fff;
     }
 
     #power-button:focus-visible {
@@ -145,7 +150,7 @@
       outline-offset: 4px;
     }
 
-    #power-button svg {
+    #power-button .power-icon {
       width: 32px;
       height: 32px;
       fill: none;
@@ -154,16 +159,35 @@
       stroke-linecap: round;
     }
 
-    #power-progress {
+    /* Download progress: a ring over the button's border, from 12 o'clock, clockwise. */
+    #power-ring {
       position: absolute;
-      left: 0;
-      bottom: 0;
-      height: 2px;
-      width: 0;
-      background: #e0e0e0;
+      inset: -2px;
+      width: 72px;
+      height: 72px;
+      fill: none;
+      stroke: #e0e0e0;
+      stroke-width: 2;
+      transform: rotate(-90deg);
+      pointer-events: none;
     }
 
-    /* "click it" doodle pointing at the power button; shown once the button enables. */
+    #power-ring circle {
+      stroke-dasharray: 100;
+      stroke-dashoffset: calc(100 - var(--progress, 0));
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      #power-screen[data-state="pending"] .power-icon {
+        animation: power-pulse 1.4s ease-in-out infinite;
+      }
+    }
+
+    @keyframes power-pulse {
+      50% { opacity: 0.45; }
+    }
+
+    /* "click it" doodle pointing at the power button; shown from the first frame until a press. */
     .power-hint {
       position: absolute;
       overflow: visible;
@@ -217,25 +241,30 @@
       }
     }
 
-    #power-button:not(:disabled) ~ .power-hint {
+    #power-screen:not([data-state="pending"]) .power-hint {
       opacity: 1;
     }
 
+    #power-screen[data-state="pending"] .power-hint {
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+    }
+
     @media (prefers-reduced-motion: no-preference) {
-      #power-button:not(:disabled) ~ .power-hint text {
+      #power-screen:not([data-state="pending"]) .power-hint text {
         animation: power-hint-fade 0.5s ease-out both;
       }
 
       /* A non-scaling stroke dashes in screen pixels, so each path's --k (its length over the
          viewBox width) times the rendered width is its on-screen length. The gap outlasts the
          path, so no dash (or its round cap) shows before the draw starts. */
-      #power-button:not(:disabled) ~ .power-hint path {
+      #power-screen:not([data-state="pending"]) .power-hint path {
         --dash: calc(var(--hint-w) * var(--k));
         stroke-dasharray: var(--dash) calc(var(--dash) * 2);
         animation: power-hint-draw 1.1s cubic-bezier(0.45, 0, 0.3, 1) 0.4s both;
       }
 
-      #power-button:not(:disabled) ~ .power-hint .power-hint-head {
+      #power-screen:not([data-state="pending"]) .power-hint .power-hint-head {
         animation-duration: 0.25s;
         animation-delay: 1.5s;
       }
@@ -338,9 +367,10 @@
   </noscript>
   <div id="app">
     <div id="monitor-frame">
-      <div id="power-screen">
-        <button id="power-button" type="button" aria-label="Power on" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
+      <div id="power-screen" data-state="loading">
+        <button id="power-button" type="button" aria-label="Power on">
+          <svg id="power-ring" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="35" pathLength="100"/></svg>
+          <svg class="power-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M6.3 6.7a8 8 0 1 0 11.4 0"/></svg>
         </button>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nothing+You+Could+Do&amp;display=swap&amp;text=click%20it" />
         <svg class="power-hint power-hint--landscape" viewBox="0 0 300 200" aria-hidden="true">
@@ -353,7 +383,6 @@
           <path style="--k: 1.64" d="M157 80C157 80 157 81 156 82C156 83 156 84 155 84C155 85 155 86 155 87C154 88 154 88 154 89C153 90 153 91 153 92C153 93 152 93 152 95C152 96 152 98 151 100C151 102 151 105 151 107C151 110 152 113 152 115C152 118 153 121 154 123C155 125 156 127 157 129C158 131 159 132 160 133C161 134 163 135 164 135C165 135 166 135 167 135C167 134 168 133 169 132C169 131 170 130 170 129C170 128 170 127 170 125C170 124 170 123 169 121C169 120 168 119 168 118C167 117 166 116 165 115C164 114 163 114 162 114C160 113 159 113 158 113C156 114 155 114 153 115C152 116 150 117 149 118C147 119 146 121 144 122C143 124 141 126 140 128C139 131 138 133 137 136C136 138 135 141 134 144C133 146 133 149 132 152C132 155 132 158 132 160C132 163 132 166 132 168C132 171 132 173 133 175C133 177 134 179 135 181C135 183 136 184 137 186C138 187 139 188 140 189C141 190 142 190 142 190C143 191 144 191 145 190C146 190 147 190 147 189C148 189 148 188 149 187C149 186 149 185 149 184C150 183 150 182 149 181C149 180 149 179 148 178C148 177 147 176 146 175C146 174 145 174 144 173C143 173 142 173 140 173C139 173 138 173 137 174C136 174 134 175 133 176C132 177 130 178 129 180C128 181 127 183 125 185C124 187 123 189 122 191C121 193 121 196 120 198C119 201 119 203 118 206C118 208 118 211 117 214C117 216 117 219 118 221C118 224 118 226 119 228C119 230 120 233 120 234C121 236 122 238 123 240C123 241 124 242 125 243C126 244 127 245 128 246C129 246 130 247 131 247C132 247 133 247 134 247C134 246 135 246 136 245C136 245 137 244 137 243C138 243 138 242 138 241C138 240 138 239 138 239C138 238 138 237 138 237C137 236 137 235 136 235C136 235 135 235 134 235C133 235 132 235 131 236C130 237 128 238 127 239C126 241 125 242 124 244C123 246 122 248 121 250C120 252 119 254 119 256C118 258 118 260 118 261C118 263 118 265 118 266C118 267 118 268 118 269C119 270 119 271 119 272C119 272 119 273 120 274C120 275 120 276 120 277C120 278 120 279 121 280C121 280 121 281 121 282C121 283 121 284 121 285C121 286 121 287 122 288C122 288 122 289 122 290C122 291 122 292 122 293C122 294 120 295 120 295"/>
           <path class="power-hint-head" style="--k: 0.14" d="M131 282Q127 288 120 295Q117 289 117 280"/>
         </svg>
-        <div id="power-progress"></div>
       </div>
 
       <div id="off-screen" role="button" tabindex="0" hidden>It's now safe to close this tab.</div>
@@ -379,7 +408,6 @@
     // =========================================================================
     const powerScreen = document.getElementById("power-screen");
     const powerButton = document.getElementById("power-button");
-    const powerProgress = document.getElementById("power-progress");
 
     // The guest display as the VM generator built it (tools/vm/display.ts): its depth, VRAM
     // size, the mode in the saved state, and the limits on the sizes it can switch to.
@@ -774,17 +802,11 @@
       { passive: false }
     );
 
-    // Overall progress across every downloaded file.
-    const downloads = new Map();
+    // The ring follows the saved state, which is nearly all of the download; the files before it
+    // are small and finish first, so summing them would fill the ring and then drain it.
     emulator.add_listener("download-progress", (e) => {
-      if (e && e.total > 0) {
-        downloads.set(e.file_index, e);
-        let loaded = 0, total = 0;
-        for (const d of downloads.values()) {
-          loaded += d.loaded;
-          total += d.total;
-        }
-        powerProgress.style.width = `${Math.min(100, (loaded / total) * 100)}%`;
+      if (e && e.total > 0 && /\.state\./.test(e.file_name)) {
+        powerButton.style.setProperty("--progress", Math.min(100, (e.loaded / e.total) * 100));
       }
     });
 
@@ -837,19 +859,45 @@
     window.addEventListener("resize", scheduleResolutionSync);
     window.visualViewport.addEventListener("resize", scheduleResolutionSync);
 
-    emulator.add_listener("emulator-loaded", () => {
-      powerProgress.style.width = "100%";
-      powerButton.disabled = false;
-    });
-
-    // The press itself must run the emulator so the user activation unlocks audio.
-    powerButton.addEventListener("click", (e) => {
-      e.stopPropagation();
+    function powerOn() {
       powerScreen.hidden = true;
       emulator.speaker_adapter.dac.enabled = true;
       emulator.run();
       powered = true;
       syncGuestResolution();
+      // A press made before v86 created its speaker had no audio context to unlock; the
+      // visitor's next press inside the machine does it, and the sound starts then.
+      const audio = emulator.speaker_adapter.audio_context;
+      if (audio.state !== "running") {
+        const unlock = () => audio.resume();
+        screenContainer.addEventListener("pointerdown", unlock, { once: true });
+        window.addEventListener("keydown", unlock, { once: true });
+      }
+    }
+
+    emulator.add_listener("emulator-loaded", () => {
+      powerButton.style.setProperty("--progress", 100);
+      if (powerScreen.dataset.state === "pending") {
+        powerOn();
+      } else {
+        powerScreen.dataset.state = "ready";
+      }
+    });
+
+    // The press itself unlocks audio: a ready machine runs inside it, and a press during loading
+    // resumes the speaker's audio context there. v86 creates the speaker only after the wasm and
+    // BIOS downloads, so a press before that has no context to resume (powerOn handles that).
+    powerButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const state = powerScreen.dataset.state;
+      if (state === "pending") return;
+      if (state === "ready") {
+        powerOn();
+        return;
+      }
+      powerScreen.dataset.state = "pending";
+      powerButton.setAttribute("aria-label", "Starting\u2026");
+      emulator.speaker_adapter?.audio_context.resume();
     });
 
     // =========================================================================
