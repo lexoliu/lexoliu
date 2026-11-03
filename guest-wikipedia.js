@@ -81,6 +81,9 @@ export function packPages(sizes, budget) {
   return pages;
 }
 
+/** The anchor builder `pager` wants, for pages whose address is `url(n)`. */
+const pageLink = (url) => (n, label) => `<A HREF="${guestText(url(n))}">${label}</A>`;
+
 const classes = (node) => node.getAttribute("class")?.split(/\s+/) ?? [];
 
 /** Whether `node` sits in the running text, not inside a table or another figure. */
@@ -282,7 +285,7 @@ ${
     ? `<P>There were no results matching the query <B>${guestText(query)}</B>.`
     : `<P>Results ${offset + 1}-${offset + hits.length} of ${total.toLocaleString("en-US")} for <B>${guestText(query)}</B>:
 ${this.#hitList(hits)}
-${pager({ link: searchLink, page: offset / SEARCH_PAGE + 1, pages, what: "Results" })}`
+${pager(pageLink(searchLink), offset / SEARCH_PAGE + 1, pages, "Results")}`
 }`;
     return htmlResponse(200, this.#chrome({ title: `Search results for "${query}" - Wikipedia`, real: `/w/index.php?${new URLSearchParams({ search: query, fulltext: "1" })}`, body, query }));
   }
@@ -302,7 +305,7 @@ ${pager({ link: searchLink, page: offset / SEARCH_PAGE + 1, pages, what: "Result
     const page = Math.min(Math.max(1, requested), article.pages.length);
     const pageUrl = (n) => href(`${articlePath(article.title)}${n === 1 ? "" : `?page=${n}`}`);
     const from = redirectedFrom ?? (normalizeTitle(title) === article.title ? undefined : title);
-    const nav = article.pages.length > 1 ? pager({ link: pageUrl, page, pages: article.pages.length, what: "Article" }) : "";
+    const nav = article.pages.length > 1 ? pager(pageLink(pageUrl), page, article.pages.length, "Article") : "";
     const next = page < article.pages.length ? `<P><FONT SIZE="-1">Continues with <A HREF="${guestText(pageUrl(page + 1))}">${guestText(article.pages[page].heading ?? "the next page")}</A></FONT>` : "";
     const body = `<H1>${guestText(article.title)}</H1>
 <FONT SIZE="-1"><I>From Wikipedia, the free encyclopedia</I>${from === undefined ? "" : ` &nbsp; (Redirected from ${guestText(normalizeTitle(from))})`}</FONT>

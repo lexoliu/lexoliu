@@ -1,10 +1,10 @@
-// What the guest's sites (guest-github.js, guest-wikipedia.js) share: the errors a page turns into
-// an error page, HTML and empty responses, the pager line, and the image proxy that turns any
-// picture into what Netscape Navigator 3.0 shows.
+// Pieces shared by the sites the guest browses through the host page (guest-github.js, guest-hn.js,
+// guest-wikipedia.js): the errors a page turns into an error page, HTML and empty responses, the
+// pager line, a memo of asynchronous results, and the image proxy that turns any picture into what
+// Netscape Navigator 3.0 shows.
 import { canvasJpeg } from "./guest-icons.js";
-import { guestText } from "./guest-text.js";
 
-/** The upstream answered, and has nothing at the address. */
+/** The upstream has nothing at the requested address. */
 export class NotFound extends Error {}
 
 /** The upstream could not be reached or answered with an error. */
@@ -12,7 +12,7 @@ export class Upstream extends Error {}
 
 const STATUS_TEXT = { 200: "OK", 404: "Not Found" };
 
-/** A response carrying the page `html`. */
+/** An HTML 3.2 page as the guest's HTTP response. */
 export function htmlResponse(status, html) {
   const bytes = new TextEncoder().encode(html);
   return new Response(bytes, {
@@ -22,24 +22,23 @@ export function htmlResponse(status, html) {
   });
 }
 
-/** The answer for a link that opened the host browser: the guest stays on its page. */
+/** The answer to a link that opened something in the visitor's browser: Netscape stays on its page. */
 export function noContent() {
   return new Response(null, { status: 204, statusText: "No Content" });
 }
 
 /**
- * The line of first / previous / position / next / last links for a paged page. `link(n)` is the
- * address of page n; nothing is returned for a single page.
+ * First / Previous / "what page N of M" / Next / Last, or "" when there is one page.
+ * `link(n, label)` returns the anchor of page n.
  */
-export function pager({ link, page, pages, what }) {
+export function pager(link, page, pages, what) {
   if (pages <= 1) return "";
-  const anchor = (n, label) => `<A HREF="${guestText(link(n))}">${label}</A>`;
   const parts = [
-    page > 1 ? anchor(1, "&laquo; First") : "&laquo; First",
-    page > 1 ? anchor(page - 1, "&lt; Previous") : "&lt; Previous",
+    page > 1 ? link(1, "&laquo; First") : "&laquo; First",
+    page > 1 ? link(page - 1, "&lt; Previous") : "&lt; Previous",
     `<B>${what} page ${page} of ${pages}</B>`,
-    page < pages ? anchor(page + 1, "Next &gt;") : "Next &gt;",
-    page < pages ? anchor(pages, "Last &raquo;") : "Last &raquo;",
+    page < pages ? link(page + 1, "Next &gt;") : "Next &gt;",
+    page < pages ? link(pages, "Last &raquo;") : "Last &raquo;",
   ];
   return `<P><FONT SIZE="-1">[ ${parts.join(" ] [ ")} ]</FONT>`;
 }

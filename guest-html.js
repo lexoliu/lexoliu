@@ -48,8 +48,10 @@ const TABLE_PARTS = new Set(["TABLE", "THEAD", "TBODY", "TFOOT", "TR", "TD", "TH
  *   float(node)             {align, width} to float a table or figure beside the text
  */
 class Walker {
-  constructor(links) {
+  /** `fences` holds the highlighted lines of each fenced code block, by the index its <pre data-fence> names. */
+  constructor(links, fences) {
     this.links = links;
+    this.fences = fences;
   }
 
   children(node) {
@@ -104,6 +106,7 @@ class Walker {
       case "LI":
         return `<LI>${inner()}\n`;
       case "PRE":
+        if (node.hasAttribute("data-fence")) return `<PRE>${this.fences[Number(node.getAttribute("data-fence"))].join("\n")}</PRE>\n`;
         return `<PRE>${guestText(expandTabs(node.textContent.replace(/\n$/, "")))}</PRE>\n`;
       case "TABLE": {
         const float = this.links.float?.(node);
@@ -167,7 +170,16 @@ class Walker {
 }
 
 /** DOM nodes -> HTML 3.2, under the site policy `links` (see Walker). */
-export function renderNodes(nodes, links) {
-  const walker = new Walker(links);
+export function renderNodes(nodes, links, fences = []) {
+  const walker = new Walker(links, fences);
   return nodes.map((node) => walker.node(node)).join("");
+}
+
+/**
+ * HTML text -> HTML 3.2, with `links` as for renderNodes and `fences` the highlighted code blocks
+ * its <pre data-fence> elements name. The text is parsed into an inert document, nothing in it loads.
+ */
+export function renderHtml(html, links, fences = []) {
+  const doc = new DOMParser().parseFromString(`<body>${html}`, "text/html");
+  return renderNodes([...doc.body.childNodes], links, fences);
 }
