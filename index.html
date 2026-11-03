@@ -349,7 +349,7 @@
     // =========================================================================
     // 1. Virtual Intranet & External Link Bridge for Netscape Navigator 3.0
     // =========================================================================
-    import { PAGES, wrapHtml32 } from "/guest-pages.js";
+    import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf, wrapHtml32 } from "/guest-pages.js";
     import { pickGuestMode } from "/guest-display.js";
 
     // =========================================================================
@@ -423,6 +423,23 @@
       const host = parsed.hostname.toLowerCase();
       if (host === "lexo.cool" || host === "www.lexo.cool") {
         const pathKey = parsed.pathname === "" || parsed.pathname === "/index.html" ? "/" : parsed.pathname;
+        const mailAddress = mailAddressOf(parsed.pathname);
+        if (mailAddress !== undefined) {
+          // Netscape stays on its page; the visitor's own mail client gets the address.
+          window.location.assign(`mailto:${mailAddress}`);
+          return new Response(null, { status: 204, statusText: "No Content" });
+        }
+        const image = GUEST_IMAGES[pathKey];
+        if (image !== undefined) {
+          const res = await fetch(`/public/vm/${image}`);
+          if (!res.ok) throw new Error(`${image}: HTTP ${res.status}`);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          return new Response(bytes, {
+            status: 200,
+            statusText: "OK",
+            headers: { "Content-Type": GUEST_IMAGE_TYPE, "Content-Length": String(bytes.byteLength) },
+          });
+        }
         const html = PAGES[pathKey];
         const found = html !== undefined;
         const bytes = new TextEncoder().encode(
