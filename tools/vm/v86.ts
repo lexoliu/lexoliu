@@ -2,6 +2,7 @@
 // a v86 release carries them. Each patch is the diff of an upstream pull request:
 //   sb16-dma-pacing.patch  speaker: drop stale DAC requests from the worklet (copy/v86#1661)
 //   pam-rom-protect.patch  pci: emulate the i440FX PAM write protection of the shadowed ROMs
+//   tcp-send-window.patch  fake_network: send up to the guest's TCP window, retransmit lost segments
 import { availableParallelism } from "node:os";
 import { cp, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -9,7 +10,7 @@ import { run } from "./disk.ts";
 import type { SourceName } from "./sources.ts";
 
 const PATCH_DIR = join(dirname(import.meta.path), "v86");
-const PATCHES = ["sb16-dma-pacing.patch", "pam-rom-protect.patch"];
+const PATCHES = ["sb16-dma-pacing.patch", "pam-rom-protect.patch", "tcp-send-window.patch"];
 const ARTIFACTS = ["libv86.js", "libv86.mjs", "v86.wasm"];
 
 /** The patched v86 tree: libv86.js, libv86.mjs and v86.wasm in `build`, the BIOSes in `bios`. */
