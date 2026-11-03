@@ -30,7 +30,7 @@
 // the page's speaker asks for samples, so the sound starts whenever the restored machine runs.
 import { availableParallelism } from "node:os";
 import { VGA_MEMORY_SIZE } from "./display.ts";
-import type { ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
+import type { Frame, ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
 
 /** Wall-clock budget from power-on to the snapshot moment (a local boot takes ~12 s). */
 const BOOT_DEADLINE_MS = 300_000;
@@ -87,6 +87,8 @@ export interface SnapshotInputs {
   screen: [number, number];
   /** Every display mode the page can ask RESCHG.EXE for at power-on; each round runs each. */
   powerOnModes: [number, number][];
+  /** The power-on mode (one of `powerOnModes`) whose boot also returns the screen it ends on. */
+  captureMode: [number, number];
 }
 
 export interface DiskPreload {
@@ -101,6 +103,8 @@ export interface Snapshot {
   state: Uint8Array;
   hda: DiskPreload;
   hdb: DiskPreload;
+  /** The guest's screen in `captureMode` once Netscape rendered the homepage. */
+  frame: Frame;
 }
 
 /** The members of v86's AsyncXHRPartfileBuffer (src/buffer.js) the preload uses. */
@@ -181,6 +185,9 @@ async function boundedMap<T, R>(items: T[], bound: number, run: (item: T) => Pro
 /** Boots to the startup sound and returns the state saved there with the boot's reads preloaded. */
 export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Snapshot> {
   const { V86 } = await import(inputs.libv86);
+  if (!inputs.powerOnModes.some(([w, h]) => w === inputs.captureMode[0] && h === inputs.captureMode[1])) {
+    throw new Error(`the capture mode ${inputs.captureMode.join("x")} is not a power-on mode`);
+  }
   const t0 = performance.now();
   const elapsed = () => `${((performance.now() - t0) / 1000).toFixed(1)} s`;
 
@@ -285,7 +292,13 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
       await warm.destroy();
     }
     const runs = await boundedMap(inputs.powerOnModes, lanes, (mode) =>
-      replayInWorker({ libv86: inputs.libv86, options, state: state.slice().buffer, mode }),
+      replayInWorker({
+        libv86: inputs.libv86,
+        options,
+        state: state.slice().buffer,
+        mode,
+        capture: mode[0] === inputs.captureMode[0] && mode[1] === inputs.captureMode[1],
+      }),
     );
     const missed = inputs.powerOnModes
       .map((mode, i) => [mode, runs[i].misses] as const)
@@ -299,7 +312,9 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
         readBytes: blocks[name].size * BLOCK_SIZE,
         preloadedBlocks: preloaded[name],
       });
-      return { state, hda: report("hda"), hdb: report("hdb") };
+      const frame = runs[inputs.powerOnModes.findIndex(([w, h]) => w === inputs.captureMode[0] && h === inputs.captureMode[1])].frame;
+      if (!frame) throw new Error(`the boot in ${inputs.captureMode.join("x")} returned no screen`);
+      return { state, hda: report("hda"), hdb: report("hdb"), frame };
     }
     for (const run of runs) for (const name of ["hda", "hdb"] as const) for (const b of run.reads[name]) blocks[name].add(b);
   }
