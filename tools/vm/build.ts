@@ -50,7 +50,9 @@ const work = join(cache, "work");
  * whole once two replays read them differently. So the set spans the bounded space of modes the
  * page asks for (display.ts): its corners (the least square, the widest and the tallest at the
  * least shorter side, the widest and tallest at the most pixels) and the phones, tablets and
- * desktops between them, each in portrait and landscape.
+ * desktops between them, each in portrait and landscape. Each replay then switches to the next
+ * mode of the list and back, as a resize while running does, so the order pairs rotations
+ * (portrait next to landscape) as well as jumps across the space.
  */
 // prettier-ignore
 const POWER_ON_VIEWPORTS: [number, number][] = [

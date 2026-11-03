@@ -1,9 +1,12 @@
 // A worker that restores a saved state as the page does and runs the boot after it in one
-// power-on display mode, recording every disk block the guest reads (tools/vm/snapshot.ts).
+// power-on display mode, then switches modes as resizes while running do, recording every disk
+// block the guest reads (tools/vm/snapshot.ts).
 //
-// The run asks RESCHG.EXE, listening in the state, for the mode right after it starts, as the
-// page does at power-on; Netscape then opens lexo.cool and renders the page's homepage. The run
-// ends once the disks went quiet after Netscape's request.
+// The run asks RESCHG.EXE, listening in the state, for the first mode right after it starts, as
+// the page does at power-on; Netscape then opens lexo.cool and renders the page's homepage. Once
+// the disks went quiet after Netscape's request, the run asks for each further mode in turn, as
+// the page does when the viewport changes, each once the disks went quiet after the one before.
+// The run ends once they went quiet after the last.
 import { join } from "node:path";
 import { GUEST_IMAGES, GUEST_IMAGE_TYPE, PAGES, mailAddressOf } from "../../guest-pages.js";
 import { logReads, newReadLog } from "./reads.ts";
@@ -17,8 +20,10 @@ const NETSCAPE_DEADLINE_MS = 300_000;
  * Netscape keep paging in code and data in the background, as the visitor's machine does.
  */
 const DISK_QUIET_MS = 3_000;
-/** Wall-clock budget from Netscape's request to the quiet disk. */
+/** Wall-clock budget from Netscape's request, or from a switch, to the quiet disk. */
 const QUIET_DEADLINE_MS = 120_000;
+/** Wall-clock budget from asking RESCHG.EXE for a mode while running to its RESCHG_OK. */
+const SWITCH_DEADLINE_MS = 60_000;
 /** Interval at which the run asks the SB16 for samples, standing in for a speaker. */
 const SPEAKER_PULL_MS = 10;
 const HOMEPAGE_HOST = "lexo.cool";
@@ -28,10 +33,11 @@ export interface ReplayRequest {
   /** V86 options the state was saved with, less the state itself. */
   options: Record<string, unknown>;
   state: ArrayBuffer;
-  mode: [number, number];
+  /** The modes the run asks for in turn: the power-on mode, then the switches of resizes while running. */
+  modes: [number, number][];
   /** Directory holding the generated files GUEST_IMAGES names (the build's output directory). */
   assetsDir: string;
-  /** Returns the guest's screen once the run is over (the homepage rendered). */
+  /** Returns the guest's screen once the disks went quiet in the power-on mode (the homepage rendered). */
   capture: boolean;
 }
 
@@ -42,12 +48,18 @@ export interface Frame {
   rgba: Uint8Array;
 }
 
-export interface ReplayResult {
+/** What the guest read from the request for one mode to the quiet disk after it. */
+export interface ReplayStep {
   /** Indices of the blocks the guest read, per disk. */
   reads: { hda: number[]; hdb: number[] };
   /** Reads the state's block caches could not serve, per disk. */
   misses: { hda: number; hdb: number };
-  /** The screen after the quiet disk, when the request asked for it. */
+}
+
+export interface ReplayResult {
+  /** One step per mode of the request, in its order. */
+  steps: ReplayStep[];
+  /** The screen once the disk went quiet in the power-on mode, when the request asked for it. */
   frame?: Frame;
 }
 
@@ -85,7 +97,8 @@ function readFrame(vga: any): Frame {
   return { width, height, rgba };
 }
 
-async function replay({ libv86, options, state, mode: [w, h], assetsDir, capture }: ReplayRequest): Promise<ReplayResult> {
+async function replay({ libv86, options, state, modes, assetsDir, capture }: ReplayRequest): Promise<ReplayResult> {
+  if (modes.length === 0) throw new Error("a run needs a power-on mode");
   if (capture) (globalThis as any).ImageData = ImageDataOverBuffer;
   const { V86 } = await import(libv86);
   let homepageRequested: () => void = () => {};
@@ -110,10 +123,23 @@ async function replay({ libv86, options, state, mode: [w, h], assetsDir, capture
     const logs = { hda: newReadLog(), hdb: newReadLog() };
     logReads(primary.master.buffer, logs.hda);
     logReads(primary.slave.buffer, logs.hdb);
+    // Ends a step: what the logs hold goes to it, and they start over for the next.
+    const takeStep = (): ReplayStep => {
+      const step = {
+        reads: { hda: [...logs.hda.blocks], hdb: [...logs.hdb.blocks] },
+        misses: { hda: logs.hda.misses, hdb: logs.hdb.misses },
+      };
+      for (const log of [logs.hda, logs.hdb]) {
+        log.blocks = new Set();
+        log.misses = 0;
+      }
+      return step;
+    };
 
-    let failSwitch: (e: Error) => void = () => {};
-    const switchFailed = new Promise<never>((_, reject) => (failSwitch = reject));
-    let switched = false;
+    let failRun: (e: Error) => void = () => {};
+    const runFailed = new Promise<never>((_, reject) => (failRun = reject));
+    let switched: () => void = () => {};
+    let asked: [number, number] = modes[0];
     let line = "";
     emulator.add_listener("serial0-output-byte", (byte: number) => {
       const c = String.fromCharCode(byte);
@@ -123,36 +149,52 @@ async function replay({ libv86, options, state, mode: [w, h], assetsDir, capture
       }
       const done = line;
       line = "";
-      if (done === "RESCHG_ERR") failSwitch(new Error(`RESCHG.EXE could not switch the display to ${w}x${h}`));
-      if (done === "RESCHG_READY") failSwitch(new Error("RESCHG.EXE started after the snapshot"));
-      if (done === "RESCHG_OK") switched = true;
+      if (done === "RESCHG_ERR") failRun(new Error(`RESCHG.EXE could not switch the display to ${asked.join("x")}`));
+      if (done === "RESCHG_READY") failRun(new Error("RESCHG.EXE started after the snapshot"));
+      if (done === "RESCHG_OK") switched();
     });
+    /** Asks RESCHG.EXE for `mode`; resolves on its RESCHG_OK, with `performance.now()` then. */
+    const switchTo = (mode: [number, number]): Promise<number> => {
+      asked = mode;
+      const ok = new Promise<number>((resolve) => (switched = () => resolve(performance.now())));
+      emulator.serial0_send(`RES ${mode[0]} ${mode[1]}\n`);
+      return ok;
+    };
+    /** Resolves once no disk was read for DISK_QUIET_MS, counting from `since` at the earliest. */
+    const quiet = async (since: number, after: string) => {
+      const quietBy = performance.now() + QUIET_DEADLINE_MS;
+      while (performance.now() - Math.max(logs.hda.last, logs.hdb.last, since) < DISK_QUIET_MS) {
+        if (performance.now() > quietBy) throw new Error(`the disks were still read ${QUIET_DEADLINE_MS / 1000} s after ${after}`);
+        await Promise.race([Bun.sleep(DISK_QUIET_MS / 10), runFailed]);
+      }
+    };
+    const steps: ReplayStep[] = [];
     let frame: Frame | undefined;
     let dacEnabled = true;
     emulator.add_listener("dac-enable", () => (dacEnabled = true));
     emulator.add_listener("dac-disable", () => (dacEnabled = false));
     const pull = setInterval(() => dacEnabled && emulator.bus.send("dac-request-data"), SPEAKER_PULL_MS);
     try {
+      const [powerOn, ...resizes] = modes;
       const verify = deadline(NETSCAPE_DEADLINE_MS, "Netscape's request for http://lexo.cool/");
       emulator.run();
-      emulator.serial0_send(`RES ${w} ${h}\n`);
-      await Promise.race([homepage, verify.promise, switchFailed]).finally(verify.clear);
-      const quietBy = performance.now() + QUIET_DEADLINE_MS;
-      while (performance.now() - Math.max(logs.hda.last, logs.hdb.last) < DISK_QUIET_MS) {
-        if (performance.now() > quietBy) throw new Error(`the disks were still read ${QUIET_DEADLINE_MS / 1000} s after Netscape's request`);
-        await Promise.race([Bun.sleep(DISK_QUIET_MS / 10), switchFailed]);
-      }
+      const poweredOn = switchTo(powerOn);
+      await Promise.race([Promise.all([homepage, poweredOn]), verify.promise, runFailed]).finally(verify.clear);
+      await quiet(performance.now(), "Netscape's request");
       if (capture) frame = readFrame(emulator.v86.cpu.devices.vga);
+      steps.push(takeStep());
+      for (const mode of resizes) {
+        const what = `the switch to ${mode.join("x")}`;
+        const switchBy = deadline(SWITCH_DEADLINE_MS, what);
+        const at = await Promise.race([switchTo(mode), switchBy.promise, runFailed]).finally(switchBy.clear);
+        await quiet(at, what);
+        steps.push(takeStep());
+      }
     } finally {
       clearInterval(pull);
       await emulator.stop();
     }
-    if (!switched) throw new Error(`the disks went quiet before RESCHG.EXE switched the display to ${w}x${h}`);
-    return {
-      reads: { hda: [...logs.hda.blocks], hdb: [...logs.hdb.blocks] },
-      misses: { hda: logs.hda.misses, hdb: logs.hdb.misses },
-      frame,
-    };
+    return { steps, frame };
   } finally {
     await emulator.destroy();
   }

@@ -24,9 +24,10 @@
 // fresh machine as the page does, puts the blocks recorded so far into the disk caches from the
 // disk images, marked to be saved, and
 // saves that state; then it runs the boot from that state once in each of a set of power-on
-// modes (tools/vm/replay.ts), as the page runs it, recording every read: those are the blocks the
-// guest reads for the first time after the snapshot. The guest's wall-clock timers make a round
-// read blocks the one before did not; those join the preload and the next round runs.
+// modes (tools/vm/replay.ts), as the page runs it, followed by switches while running, recording
+// every read: those are the blocks the guest reads for the first time after the snapshot. The
+// guest's wall-clock timers make a round read blocks the one before did not; those join the
+// preload and the next round runs.
 //
 // The page switches the guest to the viewport's own size at power-on (guest-display.js), so the
 // modes it can ask for are too many to replay each. What the boot reads in them was measured
@@ -41,8 +42,26 @@
 // 300x200, runs code in Explorer and MFC that no replayed mode does, which is why the page asks
 // for none. Preloading every file the boot reads whole instead would add some 30 MB to the
 // state: Explorer reads only the headers of large programs, for their icons.
-// The first round that reads nothing outside the preload in any mode and finds no file left to
-// preload whole gives the state; no such round within PRELOAD_ROUNDS fails the build. Blocks the
+//
+// The page also switches the mode whenever the viewport changes while the guest runs. The first
+// such switch once the boot settled runs code in Explorer that the power-on switch, which lands
+// while the shell is still starting, does not: some 12 to 20 KiB of EXPLORER.EXE and the same
+// 8 KiB of SHDOCVW.DLL, read whatever the power-on mode, the snapshot's own included (where the
+// power-on switch changes nothing). Every later switch read nothing at all, measured over runs
+// of up to four modes from 320x320 to 2560x500, between portrait and landscape and back. Which
+// blocks of EXPLORER.EXE the first switch reads differs between runs, as with the files above. So
+// each run switches, once the disks went quiet after Netscape's request, to the next power-on mode
+// of the list (the last to the first) and then back: every replayed mode is the source of one such
+// switch and the target of another, so the first switch's variation shows across the bounded space
+// as the boot's does and the files it reads differently are preloaded whole, and the switch back
+// stands for every later one, so a round in which it reads outside the preload does not converge.
+// Even so, which blocks the first switch reads depends on the mode pair, and the pairs replayed
+// are a few of those a resize can make (growing both dimensions from a 320-high mode is none), so
+// the replayed pairs cannot be relied on to cover the others: every file any switch step reads is
+// preloaded whole, whatever the pair.
+//
+// The first round in which no step of any run reads outside the preload and that finds no file left
+// to preload whole gives the state; no such round within PRELOAD_ROUNDS fails the build. Blocks the
 // guest wrote before the snapshot are in the state already and stay as they are; byte ranges a
 // disk pins (the registry hives, the FAT) are preloaded whole from the start.
 //
@@ -52,7 +71,7 @@ import { availableParallelism } from "node:os";
 import type { DiskFiles } from "./disk.ts";
 import { VGA_MEMORY_SIZE } from "./display.ts";
 import { BLOCK_SIZE, type DiskBuffer as ReadableDiskBuffer, logReads, newReadLog } from "./reads.ts";
-import type { Frame, ReplayReply, ReplayRequest, ReplayResult } from "./replay.ts";
+import type { Frame, ReplayReply, ReplayRequest, ReplayResult, ReplayStep } from "./replay.ts";
 
 /** Wall-clock budget from power-on to the snapshot moment (a local boot takes ~12 s). */
 const BOOT_DEADLINE_MS = 300_000;
@@ -201,6 +220,25 @@ function disks(emulator: any): { hda: DiskBuffer; hdb: DiskBuffer } {
   return { hda: primary.master.buffer, hdb: primary.slave.buffer };
 }
 
+const modesName = (modes: [number, number][]) => modes.map((m) => m.join("x")).join(" > ");
+
+/** Every block a run read on `disk` over its steps, each once. */
+const runReads = (steps: ReplayStep[], disk: "hda" | "hdb") => [...new Set(steps.flatMap((step) => step.reads[disk]))];
+
+/** The files of `files` in which any block was read by a step after the first (a switch while running) of any run. */
+function filesReadBySwitches(files: DiskFiles, runs: ReplayStep[][], disk: "hda" | "hdb"): Set<string> {
+  const switched = new Set<string>();
+  for (const steps of runs) {
+    for (const step of steps.slice(1)) {
+      for (const b of step.reads[disk]) {
+        const file = files.fileOf(b);
+        if (file !== undefined) switched.add(file);
+      }
+    }
+  }
+  return switched;
+}
+
 /** Runs the boot after `request.state` in a worker of its own (tools/vm/replay.ts). */
 function replayInWorker(request: ReplayRequest): Promise<ReplayResult> {
   const worker = new Worker(new URL("./replay.ts", import.meta.url).href);
@@ -208,9 +246,9 @@ function replayInWorker(request: ReplayRequest): Promise<ReplayResult> {
     worker.onmessage = (event: MessageEvent<ReplayReply>) => {
       const reply = event.data;
       if (reply.ok) resolve(reply.result);
-      else reject(new Error(`the boot in ${request.mode.join("x")}: ${reply.error}`));
+      else reject(new Error(`the boot in ${modesName(request.modes)}: ${reply.error}`));
     };
-    worker.onerror = (event) => reject(new Error(`the boot in ${request.mode.join("x")}: ${event.message}`));
+    worker.onerror = (event) => reject(new Error(`the boot in ${modesName(request.modes)}: ${event.message}`));
     worker.postMessage(request, [request.state]);
   }).finally(() => worker.terminate());
 }
@@ -235,6 +273,10 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
   if (!inputs.powerOnModes.some(([w, h]) => w === inputs.captureMode[0] && h === inputs.captureMode[1])) {
     throw new Error(`the capture mode ${inputs.captureMode.join("x")} is not a power-on mode`);
   }
+  if (inputs.powerOnModes.length < 2) throw new Error("the runs switch from each power-on mode to another, so they need two or more");
+  // Each run powers on in one mode, switches to the next mode of the list (the last to the first),
+  // and back; see the header comment.
+  const runModes = inputs.powerOnModes.map((mode, i): [number, number][] => [mode, inputs.powerOnModes[(i + 1) % inputs.powerOnModes.length], mode]);
   const t0 = performance.now();
   const elapsed = () => `${((performance.now() - t0) / 1000).toFixed(1)} s`;
 
@@ -348,28 +390,36 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
     } finally {
       await warm.destroy();
     }
-    const runs = await boundedMap(inputs.powerOnModes, lanes, (mode) =>
+    const runs = await boundedMap(runModes, lanes, (modes) =>
       replayInWorker({
         libv86: inputs.libv86,
         options,
         state: state.slice().buffer,
-        mode,
+        modes,
         assetsDir: inputs.assetsDir,
-        capture: mode[0] === inputs.captureMode[0] && mode[1] === inputs.captureMode[1],
+        capture: modes[0][0] === inputs.captureMode[0] && modes[0][1] === inputs.captureMode[1],
       }),
     );
-    const missed = inputs.powerOnModes
-      .map((mode, i) => [mode, runs[i].misses] as const)
-      .filter(([, m]) => m.hda + m.hdb > 0);
+    // Each step of each run that read outside the preload: the mode it asked for, and its misses.
+    const missed = runModes.flatMap((modes, i) =>
+      runs[i].steps
+        .map((step, k) => [`${modesName(modes)} at ${modes[k].join("x")}`, step.misses] as const)
+        .filter(([, m]) => m.hda + m.hdb > 0),
+    );
     const newWholeFiles = { hda: [] as string[], hdb: [] as string[] };
     for (const name of ["hda", "hdb"] as const) {
-      for (const file of filesReadDifferently(inputs[name].files, runs.map((run) => run.reads[name]))) {
+      const files = inputs[name].files;
+      const whole = new Set([
+        ...filesReadDifferently(files, runs.map((run) => runReads(run.steps, name))),
+        ...filesReadBySwitches(files, runs.map((run) => run.steps), name),
+      ]);
+      for (const file of whole) {
         if (!wholeFiles[name].has(file)) newWholeFiles[name].push(file);
       }
     }
     console.log(
-      `snapshot: round ${round} at ${elapsed()}: ${missed.length} of ${runs.length} power-on modes read outside the preload` +
-        missed.map(([[w, h], m]) => ` ${w}x${h} (${m.hda} C:, ${m.hdb} D:)`).join(",") +
+      `snapshot: round ${round} at ${elapsed()}: ${missed.length} of ${runs.length * runModes[0].length} steps read outside the preload` +
+        missed.map(([step, m]) => ` ${step} (${m.hda} C:, ${m.hdb} D:)`).join(",") +
         `; files read differently, newly preloaded whole: C: ${newWholeFiles.hda.join(" ") || "none"}, D: ${newWholeFiles.hdb.join(" ") || "none"}`,
     );
     if (missed.length === 0 && newWholeFiles.hda.length + newWholeFiles.hdb.length === 0) {
@@ -384,7 +434,7 @@ export async function snapshotAtStartupSound(inputs: SnapshotInputs): Promise<Sn
       return { state, hda: report("hda"), hdb: report("hdb"), frame };
     }
     for (const name of ["hda", "hdb"] as const) {
-      for (const run of runs) for (const b of run.reads[name]) blocks[name].add(b);
+      for (const run of runs) for (const b of runReads(run.steps, name)) blocks[name].add(b);
       for (const file of newWholeFiles[name]) {
         wholeFiles[name].add(file);
         for (const b of inputs[name].files.blocksOf(file)) blocks[name].add(b);
