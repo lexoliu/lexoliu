@@ -11,7 +11,7 @@ import { dirname, join, relative } from "node:path";
 const ROOT = join(dirname(import.meta.path), "..", "..");
 const VM = join(ROOT, "public", "vm");
 /** Files served from the repository root at their own path. */
-const ROOT_FILES = ["robots.txt", "sitemap.xml", "CNAME"];
+const ROOT_FILES = ["robots.txt", "sitemap.xml", "llms.txt", "CNAME"];
 /** Directories of numbered chunks that v86 requests, each versioned as a whole. */
 const DISKS = ["hda", "hdb"];
 /** The hash is a prefix of this many hex digits of the SHA-256. */

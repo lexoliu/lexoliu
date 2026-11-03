@@ -110,16 +110,18 @@ function openInHostBrowser(url) {
   }
 }
 
-// http://github.com/ is answered from GitHub's API and raw files (guest-github.js), loaded with its
-// Markdown parser when Netscape first asks for it.
+// The guest sites' code loads in the background (preload, below), or when Netscape first asks for
+// a site before that has finished.
+
+// http://github.com/ is answered from GitHub's API and raw files (guest-github.js), with its
+// Markdown parser.
 let githubSite;
 function github() {
   githubSite ??= Promise.all([import("./guest-github.js"), highlighter()]).then(([{ GitHubSite }, highlighter]) => new GitHubSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser, highlighter }));
   return githubSite;
 }
 
-// http://en.wikipedia.org/ is answered from Wikipedia's public API (guest-wikipedia.js), loaded when
-// Netscape first asks for it.
+// http://en.wikipedia.org/ is answered from Wikipedia's public API (guest-wikipedia.js).
 let wikipediaSite;
 function wikipedia() {
   wikipediaSite ??= Promise.all([import("./guest-wikipedia.js"), highlighter()]).then(([{ WikipediaSite }, highlighter]) => new WikipediaSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser, highlighter }));
@@ -133,13 +135,40 @@ function highlighter() {
   return sharedHighlighter;
 }
 
-// http://news.ycombinator.com/ is answered from the Hacker News API (guest-hn.js), loaded when
-// Netscape first asks for it.
+// http://news.ycombinator.com/ is answered from the Hacker News API (guest-hn.js).
 let hackerNewsSite;
 function hackerNews() {
   hackerNewsSite ??= import("./guest-hn.js").then(({ HackerNewsSite }) => new HackerNewsSite({ fetch: (url) => fetch(url), openHost: openInHostBrowser }));
   return hackerNewsSite;
 }
+
+// The images of the guest's home page, by runtime file name, fetched once.
+const guestImages = new Map();
+function guestImage(name) {
+  if (!guestImages.has(name)) {
+    guestImages.set(
+      name,
+      fetch(runtimeUrl(name)).then(async (res) => {
+        if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
+        return new Uint8Array(await res.arrayBuffer());
+      }),
+    );
+  }
+  return guestImages.get(name);
+}
+
+/**
+ * Grammars loaded ahead of the first code page: the languages of the repositories the desktop
+ * shortcuts and bookmarks open (water-rs/waterui, torvalds/linux), and the most common others.
+ */
+const PRELOADED_LANGUAGES = ["rust", "toml", "kotlin", "swift", "python", "wgsl", "c", "cpp", "asm", "make", "shellscript", "javascript", "typescript", "json"];
+
+// Once the machine's state is in (the power button is ready), everything Netscape may ask the
+// page for next loads in the background, concurrently: the guest sites' code, the highlighter
+// with its engine, theme and common grammars, and the home page's images.
+emulator.add_listener("emulator-loaded", () => {
+  Promise.all([github(), wikipedia(), hackerNews(), highlighter().then((h) => h.preload(PRELOADED_LANGUAGES)), ...Object.values(GUEST_IMAGES).map(guestImage)]);
+});
 
 async function guestHttpFetch(input) {
   const parsed = new URL(typeof input === "string" ? input : input.url);
@@ -163,9 +192,7 @@ async function guestHttpFetch(input) {
     }
     const image = GUEST_IMAGES[pathKey];
     if (image !== undefined) {
-      const res = await fetch(runtimeUrl(image));
-      if (!res.ok) throw new Error(`${image}: HTTP ${res.status}`);
-      const bytes = new Uint8Array(await res.arrayBuffer());
+      const bytes = await guestImage(image);
       return new Response(bytes, {
         status: 200,
         statusText: "OK",

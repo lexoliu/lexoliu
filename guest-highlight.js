@@ -59,11 +59,31 @@ export class Highlighter {
     return Object.hasOwn(this.#languages, lang) ? lang : undefined;
   }
 
+  /** Loads the engine, the theme and the grammars of `languages` (Shiki names) before a page needs them. */
+  async preload(languages) {
+    await this.#ready();
+    await Promise.all(languages.map((lang) => this.#grammar(lang)));
+  }
+
+  /** Loads the grammar of `lang`, once however many blocks ask for it at the same time. */
+  #grammar(lang) {
+    if (!this.#loaded.has(lang)) {
+      this.#loaded.set(
+        lang,
+        (async () => {
+          const core = await this.#ready();
+          if (!Object.hasOwn(this.#languages, lang)) throw new Error(`Shiki has no language ${lang}`);
+          await core.loadLanguage((await this.#languages[lang]()).default);
+        })(),
+      );
+    }
+    return this.#loaded.get(lang);
+  }
+
   /** `code` as lines of HTML 3.2 (text with <FONT COLOR>, <B>, <I>), tabs expanded and escaped. */
   async lines(code, lang) {
     const core = await this.#ready();
-    if (!this.#loaded.has(lang)) this.#loaded.set(lang, (async () => core.loadLanguage((await this.#languages[lang]()).default))());
-    await this.#loaded.get(lang);
+    await this.#grammar(lang);
     const foreground = core.getTheme(THEME).fg.toLowerCase();
     const rows = core.codeToTokensBase(code, { lang, theme: THEME });
     return rows.map((tokens) => {
